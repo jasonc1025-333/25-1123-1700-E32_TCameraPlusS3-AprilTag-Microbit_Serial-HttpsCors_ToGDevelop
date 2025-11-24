@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {
+		"files.associations": {
+			"*.tpp": "cpp"
+		},
+		"explorer.sortOrder": "mixed",
+		"explorer.sortOrderLexicographicOptions": "default"
+	}
+}

@@ -264,6 +264,39 @@ struct LatestTagData {
     unsigned long timestamp = 0;
 } latest_tag;
 
+//// jwc 25-1123-1800 Network latency measurement
+// Tracks round-trip time for HTTP requests
+struct NetworkLatencyStats {
+    unsigned long current_ms = 0;     // Most recent latency
+    unsigned long min_ms = 99999;     // Minimum latency observed
+    unsigned long max_ms = 0;         // Maximum latency observed
+    unsigned long total_ms = 0;       // Sum of all latencies (for average)
+    unsigned long count = 0;          // Number of successful measurements
+    
+    // Calculate average latency
+    unsigned long getAverage() {
+        return (count > 0) ? (total_ms / count) : 0;
+    }
+    
+    // Update statistics with new measurement
+    void update(unsigned long latency_ms) {
+        current_ms = latency_ms;
+        if (latency_ms < min_ms) min_ms = latency_ms;
+        if (latency_ms > max_ms) max_ms = latency_ms;
+        total_ms += latency_ms;
+        count++;
+    }
+    
+    // Reset statistics
+    void reset() {
+        current_ms = 0;
+        min_ms = 99999;
+        max_ms = 0;
+        total_ms = 0;
+        count = 0;
+    }
+} network_latency;
+
 //// jwc 25-1121-1700 Forward declaration for gfx (defined later in file)
 extern Arduino_TFT *gfx;
 
@@ -308,7 +341,10 @@ bool sendAprilTagData(int tag_id, const char* camera_name) {
     
     unsigned long current_time = millis();
     
-    printf("\n*** HTTP REQUEST START ***\n");
+    //// jwc 25-1123-1800 Start latency measurement
+    unsigned long latency_start_ms = millis();
+    
+    printf("\nvvv HTTP REQUEST START vvv\n");
     printf("*** HTTP: Target URL: %s\n", TEST_SERVER_URL);
     printf("*** HTTP: Tag ID: %d, Camera: %s\n", tag_id, camera_name);
     
@@ -331,16 +367,30 @@ bool sendAprilTagData(int tag_id, const char* camera_name) {
     
     int httpResponseCode = http.POST(json_payload);
     
+    //// jwc 25-1123-1800 End latency measurement
+    unsigned long latency_end_ms = millis();
+    unsigned long latency_ms = latency_end_ms - latency_start_ms;
+    
     if (httpResponseCode > 0) {
         String response = http.getString();
+        
+        //// jwc 25-1123-1800 Update latency statistics on successful request
+        network_latency.update(latency_ms);
+        
         printf("*** HTTP SUCCESS: Response Code: %d\n", httpResponseCode);
         printf("*** HTTP SUCCESS: Server Response: %s\n", response.c_str());
-        printf("*** HTTP REQUEST END (SUCCESS) ***\n\n");
+        printf("*** HTTP LATENCY: Current=%lums, Min=%lums, Max=%lums, Avg=%lums (Count=%lu)\n",
+               network_latency.current_ms,
+               network_latency.min_ms,
+               network_latency.max_ms,
+               network_latency.getAverage(),
+               network_latency.count);
+        printf("^^^ HTTP REQUEST END (SUCCESS) ^^^\n\n");
         
-        // Show success on display
+        // Show success on display with latency
         gfx->setTextSize(1);
-        gfx->setCursor(200, 1);
-        gfx->printf("HTTP:OK");
+        gfx->setCursor(180, 1);
+        gfx->printf("HTTP:%lums", latency_ms);
         
         http.end();
         return true;
@@ -350,7 +400,7 @@ bool sendAprilTagData(int tag_id, const char* camera_name) {
         printf("    - Server not running on %s\n", TEST_SERVER_URL);
         printf("    - Network connectivity issues\n");
         printf("    - Firewall blocking port 5000\n");
-        printf("*** HTTP REQUEST END (FAILED) ***\n\n");
+        printf("^^^ HTTP REQUEST END (FAILED) ^^^\n\n");
         
         // Show error on display
         gfx->setTextSize(1);
@@ -1182,9 +1232,9 @@ void loop()
         );
         
         if (http_success) {
-            printf("*** HTTP: Successfully sent Tag ID %d\n", latest_tag.tag_id);
+            printf(">>> >>> HTTP SEND: YES * Tag ID %d\n\n", latest_tag.tag_id);
         } else {
-            printf("*** HTTP: Failed to send Tag ID %d\n", latest_tag.tag_id);
+            printf(">>> >>> HTTP SEND: NOT * Tag ID %d\n\n", latest_tag.tag_id);
         }
         
         printf("\n");
