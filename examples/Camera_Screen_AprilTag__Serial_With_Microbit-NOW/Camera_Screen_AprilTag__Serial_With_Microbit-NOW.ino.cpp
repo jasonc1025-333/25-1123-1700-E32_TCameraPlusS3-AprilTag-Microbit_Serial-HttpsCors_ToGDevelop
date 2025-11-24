@@ -170,16 +170,18 @@
 //// jwc 25-1122-0930 const char* WIFI_SSID = "Chan-Comcast-xFi";     // Replace with your WiFi SSID
 //// jwc 25-1123-0400 const char* WIFI_SSID = "Jason Phone Verizon Samsung";     // Replace with your WiFi SSID
 //// jwc 25-1123-0400 const char* WIFI_PASSWORD = "Jesus333!"; // Replace with your WiFi password
-const char* WIFI_SSID = "BMax_B1Pro-Wifi_Hotspot";
+//// jwc 25-1124-1400 retry Xfinity-Xb6: y const char* WIFI_SSID = "BMax_B1Pro-Wifi_Hotspot";
+const char* WIFI_SSID = "Chan-Comcast";     // Replace with your WiFi SSID
+
 const char* WIFI_PASSWORD = "Jesus333!";
 
 // Server URL
 //
 //// jwc 25-1120-0910 HTTP Server Configuration - matching TestServer
 //// jwc 25-1122-0930 y const char* TEST_SERVER_URL = "http://10.0.0.150:5000/esp32_apriltag_data";
-//// jwc 25-1123-0400 const char* TEST_SERVER_URL = "http://172.19.216.7:5000/esp32_apriltag_data";
-const char* TEST_SERVER_URL = "http://10.42.0.1:5000/esp32_apriltag_data";
-
+//// jwc 25-1123-0400 y const char* TEST_SERVER_URL = "http://172.19.216.7:5000/esp32_apriltag_data";
+//// jwc 25-1124-1410 y const char* TEST_SERVER_URL = "http://10.42.0.1:5000/esp32_apriltag_data";
+const char* TEST_SERVER_URL = "http://10.0.0.149:5000/esp32_apriltag_data";
 
 // Rate limiting - don't send too frequently
 //

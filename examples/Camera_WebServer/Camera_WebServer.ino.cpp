@@ -21,7 +21,8 @@
 // #define WIFI_PASSWORD "AA15994823428"
 //// jwc oy #define WIFI_SSID "LilyGo-AABB"
 //// jwc oy #define WIFI_PASSWORD "xinyuandianzi"
-#define WIFI_SSID "Chan-Comcast-xFi"
+//// jwc 25-1124-1340 y #define WIFI_SSID "Chan-Comcast-xFi"
+#define WIFI_SSID "Chan-Comcast"
 #define WIFI_PASSWORD "Jesus333!"
 
 bool OV2640_Initialization(void)
