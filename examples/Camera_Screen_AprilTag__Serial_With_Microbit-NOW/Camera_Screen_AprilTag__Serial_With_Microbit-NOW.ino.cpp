@@ -245,20 +245,11 @@ const char* TEST_SERVER_URL = "http://10.42.0.1:5000/esp32_apriltag_data";
 //// jwc 25-1123-0720 Switch to Ubuntu-Hotspot// const unsigned long HTTP_MIN_INTERVAL_MS = 500; // 2 req/sec - Optimized for home WiFi
 //// jwc 25-1123-0720 Switch to Ubuntu-Hotspot
 
-// Network Data-Send: ast throttle
-//// jwc 25-1123-0721 const unsigned long HTTP_MIN_INTERVAL_MS = 100;
-//// jwc 25-1123-0740 error 1 out of 4, slow down to allow sockets time to close: const unsigned long HTTP_MIN_INTERVAL_MS = 100;
-//// jwc 25-1123-0741 same error const unsigned long HTTP_MIN_INTERVAL_MS = 500;
-const unsigned long HTTP_MIN_INTERVAL_MS = 1000;
-
-
-// Replace with actual GDevelop endpoint
+// Replace with actual GDevelop endpoint (for future use)
 const char* GDEVELOP_SERVER_URL = "https://your-gdevelop-endpoint.com/apriltag_data"; 
 
 //// jwc 25-1120-0910 HTTP transmission control
 bool wifi_connected = false;
-unsigned long last_http_attempt = 0;
-const unsigned long HTTP_RETRY_INTERVAL = 5000; // 5 seconds between retry attempts
 
 //// jwc 25-1123-0750 Decouple screen updates from HTTP sends
 // HTTP timing - separate from screen updates
@@ -283,7 +274,7 @@ void initWiFi() {
     printf("*** WiFi Password: %s\n", WIFI_PASSWORD);
     printf("*** WiFi Band: 2.4GHz (ESP32 only supports 2.4GHz)\n");
     printf("*** Server URL: %s\n", TEST_SERVER_URL);
-    printf("*** HTTP Rate Limit: %lu ms (%0.1f req/sec)\n", HTTP_MIN_INTERVAL_MS, 1000.0 / HTTP_MIN_INTERVAL_MS);
+    printf("*** HTTP Send Interval: %lu ms (%0.1f req/sec)\n", HTTP_SEND_INTERVAL_MS, 1000.0 / HTTP_SEND_INTERVAL_MS);
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 20) {
@@ -316,12 +307,6 @@ bool sendAprilTagData(int tag_id, const char* camera_name) {
     }
     
     unsigned long current_time = millis();
-    if (current_time - last_http_attempt < HTTP_MIN_INTERVAL_MS) {
-        printf("*** HTTP: Rate limited (last attempt %lu ms ago, min %lu ms)\n", 
-               current_time - last_http_attempt, HTTP_MIN_INTERVAL_MS);
-        return false;
-    }
-    last_http_attempt = current_time;
     
     printf("\n*** HTTP REQUEST START ***\n");
     printf("*** HTTP: Target URL: %s\n", TEST_SERVER_URL);
@@ -1211,4 +1196,3 @@ void loop()
         latest_tag.has_data = false;
     }   
 }
-
