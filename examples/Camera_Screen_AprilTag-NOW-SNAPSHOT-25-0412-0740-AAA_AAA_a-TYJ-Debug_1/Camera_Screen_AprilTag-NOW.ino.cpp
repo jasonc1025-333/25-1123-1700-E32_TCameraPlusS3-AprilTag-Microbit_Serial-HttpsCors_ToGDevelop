@@ -1,0 +1,406 @@
+# 1 "C:\\Users\\jchan\\AppData\\Local\\Temp\\tmp8ugn3gur"
+#include <Arduino.h>
+# 1 "C:/11i-GD-C/09j-E3/24-1226-1006-Esp32-AllInOne-Lilygo-TCameraPlus-Esp32s3/T-CameraPlus-S3/examples/Camera_Screen_AprilTag-NOW/Camera_Screen_AprilTag-NOW.ino"
+# 44 "C:/11i-GD-C/09j-E3/24-1226-1006-Esp32-AllInOne-Lilygo-TCameraPlus-Esp32s3/T-CameraPlus-S3/examples/Camera_Screen_AprilTag-NOW/Camera_Screen_AprilTag-NOW.ino"
+#define CAMERA_MODEL_LILYGO_T_CAMERA_PLUS_S3_ESP32S3_TFT1P3IN 
+# 61 "C:/11i-GD-C/09j-E3/24-1226-1006-Esp32-AllInOne-Lilygo-TCameraPlus-Esp32s3/T-CameraPlus-S3/examples/Camera_Screen_AprilTag-NOW/Camera_Screen_AprilTag-NOW.ino"
+#include <Arduino.h>
+#include "Arduino_GFX_Library.h"
+#include "pin_config.h"
+#include <esp_camera.h>
+#include "camera_index.h"
+#include "app_httpd.tpp"
+# 75 "C:/11i-GD-C/09j-E3/24-1226-1006-Esp32-AllInOne-Lilygo-TCameraPlus-Esp32s3/T-CameraPlus-S3/examples/Camera_Screen_AprilTag-NOW/Camera_Screen_AprilTag-NOW.ino"
+#include "apriltag.h"
+#include "tag36h11.h"
+#include "common/image_u8.h"
+#include "common/zarray.h"
+# 88 "C:/11i-GD-C/09j-E3/24-1226-1006-Esp32-AllInOne-Lilygo-TCameraPlus-Esp32s3/T-CameraPlus-S3/examples/Camera_Screen_AprilTag-NOW/Camera_Screen_AprilTag-NOW.ino"
+#include <img_converters.h>
+
+
+
+
+#include "apriltag_pose.h"
+#include "common/matd.h"
+
+
+
+
+
+
+#define TAG_SIZE 0.05
+
+
+
+
+
+#define FX 924.713610878
+#define FY 924.713610878
+#define CX 403.801748132
+#define CY 305.082642826
+# 125 "C:/11i-GD-C/09j-E3/24-1226-1006-Esp32-AllInOne-Lilygo-TCameraPlus-Esp32s3/T-CameraPlus-S3/examples/Camera_Screen_AprilTag-NOW/Camera_Screen_AprilTag-NOW.ino"
+#define DEBUG 1
+
+
+apriltag_family_t *tf = tag36h11_create();
+
+apriltag_detector_t *td = apriltag_detector_create();
+
+
+
+
+static bool OV2640_Initialization_Flag = false;
+
+
+Arduino_DataBus *bus = new Arduino_HWSPI(
+    LCD_DC , LCD_CS , LCD_SCLK , LCD_MOSI , -1 );
+
+Arduino_TFT *gfx = new Arduino_ST7789(
+    bus, LCD_RST , 0 , true ,
+    LCD_WIDTH , LCD_HEIGHT ,
+    0 , 0 , 0 , 0 );
+bool OV2640_Initialization(void);
+void setup();
+void loop();
+#line 146 "C:/11i-GD-C/09j-E3/24-1226-1006-Esp32-AllInOne-Lilygo-TCameraPlus-Esp32s3/T-CameraPlus-S3/examples/Camera_Screen_AprilTag-NOW/Camera_Screen_AprilTag-NOW.ino"
+bool OV2640_Initialization(void)
+{
+    camera_config_t config;
+    config.ledc_channel = LEDC_CHANNEL_0;
+    config.ledc_timer = LEDC_TIMER_0;
+    config.pin_d0 = Y2_GPIO_NUM;
+    config.pin_d1 = Y3_GPIO_NUM;
+    config.pin_d2 = Y4_GPIO_NUM;
+    config.pin_d3 = Y5_GPIO_NUM;
+    config.pin_d4 = Y6_GPIO_NUM;
+    config.pin_d5 = Y7_GPIO_NUM;
+    config.pin_d6 = Y8_GPIO_NUM;
+    config.pin_d7 = Y9_GPIO_NUM;
+    config.pin_xclk = XCLK_GPIO_NUM;
+    config.pin_pclk = PCLK_GPIO_NUM;
+    config.pin_vsync = VSYNC_GPIO_NUM;
+    config.pin_href = HREF_GPIO_NUM;
+    config.pin_sccb_sda = SIOD_GPIO_NUM;
+    config.pin_sccb_scl = SIOC_GPIO_NUM;
+    config.pin_pwdn = PWDN_GPIO_NUM;
+    config.pin_reset = RESET_GPIO_NUM;
+
+
+    config.xclk_freq_hz = 20000000;
+# 217 "C:/11i-GD-C/09j-E3/24-1226-1006-Esp32-AllInOne-Lilygo-TCameraPlus-Esp32s3/T-CameraPlus-S3/examples/Camera_Screen_AprilTag-NOW/Camera_Screen_AprilTag-NOW.ino"
+    config.frame_size = FRAMESIZE_240X240;
+
+
+
+
+
+    config.pixel_format = PIXFORMAT_GRAYSCALE;
+
+
+    config.grab_mode = CAMERA_GRAB_LATEST;
+
+    config.fb_location = CAMERA_FB_IN_PSRAM;
+    config.jpeg_quality = 0;
+    config.fb_count = 2;
+
+
+    esp_err_t err = esp_camera_init(&config);
+    if (err != ESP_OK)
+    {
+        Serial.printf("Camera init failed with error 0x%x", err);
+        gfx->printf("Camera init failed with error 0x%x \n", err);
+
+        return false;
+    }
+
+    sensor_t *s = esp_camera_sensor_get();
+    if (s)
+    {
+        Serial.print("camera id:");
+        Serial.println(s->id.PID);
+        gfx->print("camera id:");
+        gfx->println(s->id.PID);
+        gfx->println();
+
+
+
+
+
+        s->set_brightness(s, 0);
+        s->set_contrast(s, 0);
+        s->set_saturation(s, 0);
+        s->set_whitebal(s, 1);
+        s->set_awb_gain(s, 1);
+        s->set_wb_mode(s, 0);
+        s->set_exposure_ctrl(s, 1);
+        s->set_aec2(s, 1);
+        s->set_ae_level(s, 0);
+        s->set_aec_value(s, 168);
+        s->set_gain_ctrl(s, 1);
+        s->set_agc_gain(s, 0);
+        s->set_gainceiling(s, (gainceiling_t)0);
+        s->set_bpc(s, 0);
+        s->set_wpc(s, 1);
+        s->set_raw_gma(s, 1);
+        s->set_lenc(s, 1);
+        s->set_hmirror(s, 1);
+        s->set_vflip(s, 1);
+        s->set_dcw(s, 1);
+
+
+
+
+
+        camera_sensor_info_t *sinfo = esp_camera_sensor_get_info(&(s->id));
+        if (sinfo)
+        {
+            Serial.print("camera model:");
+            Serial.println(sinfo->name);
+            gfx->print("camera model:");
+            gfx->println(sinfo->name);
+            gfx->println();
+        }
+    }
+
+    if (s->id.PID == OV3660_PID)
+    {
+        s->set_vflip(s, 1);
+        s->set_brightness(s, 1);
+        s->set_saturation(s, -2);
+    }
+# 307 "C:/11i-GD-C/09j-E3/24-1226-1006-Esp32-AllInOne-Lilygo-TCameraPlus-Esp32s3/T-CameraPlus-S3/examples/Camera_Screen_AprilTag-NOW/Camera_Screen_AprilTag-NOW.ino"
+#if defined(CAMERA_MODEL_LILYGO_T_CAMERA_PLUS_S3_ESP32S3_TFT1P3IN)
+
+
+
+
+
+
+
+    s->set_vflip(s, 1);
+
+
+
+
+    s->set_hmirror(s, 1);
+#endif
+
+
+#if DEBUG >= 1
+
+    Serial.println("*** Camera Init: End");
+#endif
+
+
+
+#if DEBUG >= 1
+    Serial.print("Init AprilTag detector... ");
+#endif
+# 342 "C:/11i-GD-C/09j-E3/24-1226-1006-Esp32-AllInOne-Lilygo-TCameraPlus-Esp32s3/T-CameraPlus-S3/examples/Camera_Screen_AprilTag-NOW/Camera_Screen_AprilTag-NOW.ino"
+    apriltag_detector_add_family(td, tf);
+
+
+
+
+
+
+
+    td->quad_sigma = 0.0;
+    td->quad_decimate = 4.0;
+    td->refine_edges = 0;
+
+
+
+    td->decode_sharpening = 0;
+
+
+    td->nthreads = 2;
+
+    td->debug = 0;
+
+
+#if DEBUG >= 1
+    Serial.println("done");
+    Serial.println("Start detecting...");
+#endif
+
+
+
+    return true;
+}
+
+void setup()
+{
+    Serial.begin(115200);
+    Serial.println("Ciallo");
+
+    pinMode(LCD_BL, OUTPUT);
+    ledcAttachPin(LCD_BL, 1);
+    ledcSetup(1, 20000, 8);
+    ledcWrite(1, 255);
+
+    gfx->begin();
+    gfx->fillScreen(WHITE);
+
+    gfx->setTextColor(BLACK);
+
+    delay(3000);
+
+    OV2640_Initialization_Flag = OV2640_Initialization();
+}
+
+void loop()
+{
+    if (OV2640_Initialization_Flag == true)
+    {
+        camera_fb_t *frame = esp_camera_fb_get();
+        if (frame)
+        {
+
+
+
+
+            gfx->drawGrayscaleBitmap(0, 0, (uint8_t *)frame->buf, frame->width, frame->height);
+
+
+
+
+            #if DEBUG >= 3
+            Serial.println("Converting frame to detector's input format... ");
+        #endif
+            image_u8_t im = {
+            .width = frame->width,
+            .height = frame->height,
+            .stride = frame->width,
+            .buf = frame->buf
+            };
+        #if DEBUG >= 3
+            Serial.println("done");
+            Serial.println("Detecting... ");
+        #endif
+
+
+            zarray_t *detections = apriltag_detector_detect(td, &im);
+        #if DEBUG >= 3
+            Serial.println("done. Result:");
+        #endif
+# 442 "C:/11i-GD-C/09j-E3/24-1226-1006-Esp32-AllInOne-Lilygo-TCameraPlus-Esp32s3/T-CameraPlus-S3/examples/Camera_Screen_AprilTag-NOW/Camera_Screen_AprilTag-NOW.ino"
+            gfx->setCursor(1,1);
+
+
+
+
+            gfx->setTextSize(5);
+            gfx->printf(".");
+
+            if(zarray_size(detections) > 0){
+
+
+            for (int i = 0; i < zarray_size(detections); i++) {
+                apriltag_detection_t *det;
+                zarray_get(detections, i, &det);
+
+
+
+                if(det->id % 2 == 0){
+
+
+                    gfx->setTextColor(BLUE);
+                }
+                else{
+
+
+                    gfx->setTextColor(RED);
+                }
+
+
+
+                gfx->printf("%d ", (det->id));
+
+
+
+        #if DEBUG >= 1
+
+
+
+
+
+
+                Serial.printf("*** *** *** [DETECT ID:] %5.0d,%5.0f,", det->id, det->decision_margin);
+        #endif
+
+
+                apriltag_detection_info_t info;
+                info.det = det;
+                info.tagsize = TAG_SIZE;
+                info.fx = FX;
+                info.fy = FY;
+                info.cx = CX;
+                info.cy = CY;
+
+
+                apriltag_pose_t pose;
+                double err = estimate_tag_pose(&info, &pose);
+
+        #if DEBUG >= 1
+
+
+
+                Serial.printf("\n");
+                Serial.printf("    *** pose.R: \n");
+
+                matd_print(pose.R, "%15f");
+                Serial.printf("    *** pose.t: \n");
+
+                matd_print(pose.t, "%15f");
+        #endif
+
+
+                double yaw = atan2(MATD_EL(pose.R, 1, 0), MATD_EL(pose.R, 0, 0)) * RAD_TO_DEG;
+                double pitch = atan2(-MATD_EL(pose.R, 2, 0), sqrt(pow(MATD_EL(pose.R, 2, 1), 2) + pow(MATD_EL(pose.R, 2, 2), 2))) * RAD_TO_DEG;
+                double roll = atan2(MATD_EL(pose.R, 2, 1), MATD_EL(pose.R, 2, 2)) * RAD_TO_DEG;
+        #if DEBUG >= 1
+
+
+                Serial.printf(" *** y,p,r: %5.0f, %5.0f, %5.0f", yaw, pitch, roll);
+        #endif
+
+                matd_t *R_transpose = matd_transpose(pose.R);
+
+
+                for (int i = 0; i < pose.t->nrows; i++) {
+                    MATD_EL(pose.t, i, 0) = -MATD_EL(pose.t, i, 0);
+                }
+
+
+                matd_t *camera_position = matd_multiply(R_transpose, pose.t);
+        #if DEBUG >= 1
+
+
+                Serial.printf(" *** x,y,z: %5.0f, %5.0f, %5.0f", MATD_EL(camera_position, 0, 0), MATD_EL(camera_position, 1, 0), MATD_EL(camera_position, 2, 0));
+        #endif
+
+                matd_destroy(R_transpose);
+                matd_destroy(camera_position);
+        #if DEBUG >= 1
+
+                Serial.printf("\n");
+        #endif
+                }
+        #if DEBUG >= 1
+
+            Serial.printf("\n");
+        #endif
+            }
+
+
+            apriltag_detections_destroy(detections);
+
+
+
+            esp_camera_fb_return(frame);
+        }
+        delay(1);
+    }
+}

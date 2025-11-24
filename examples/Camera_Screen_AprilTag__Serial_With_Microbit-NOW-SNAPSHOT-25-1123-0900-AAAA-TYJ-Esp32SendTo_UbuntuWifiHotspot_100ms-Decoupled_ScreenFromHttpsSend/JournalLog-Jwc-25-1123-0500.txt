@@ -1,0 +1,65 @@
+
+
+jasonc1025@BMax-B1Pro:~/Jwc-25-0514-2300-Bmax_B1Pro-Ubuntu_22/12j-Db/Dropbox/09k-E32-SM/25-0517-1900-E32--OPENED-25-0803-0830-MoveToDb/13i-T-CameraPlus-S3-NOW-Ubuntu22_BmaxB1Pro--25-0505-0730-NOW/examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW/25-1122-2000-Important-SendDataToGdevelop$ ifconfig
+enp2s0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 10.0.0.220  netmask 255.255.255.0  broadcast 10.0.0.255
+        inet6 fe80::3f3a:d3e6:1e72:76a5  prefixlen 64  scopeid 0x20<link>
+        inet6 2601:647:4400:2dd2:87b5:13d2:9dbc:83dd  prefixlen 64  scopeid 0x0<global>
+        inet6 2601:647:4400:2dd2::fb11  prefixlen 128  scopeid 0x0<global>
+        inet6 2601:647:4400:2dd2:8613:ccaa:f1f5:5399  prefixlen 64  scopeid 0x0<global>
+        ether 00:e0:4c:38:ce:c4  txqueuelen 1000  (Ethernet)
+        RX packets 1776  bytes 630599 (630.5 KB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 1992  bytes 781677 (781.6 KB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+lo: flags=73<UP,LOOPBACK,RUNNING>  mtu 65536
+        inet 127.0.0.1  netmask 255.0.0.0
+        inet6 ::1  prefixlen 128  scopeid 0x10<host>
+        loop  txqueuelen 1000  (Local Loopback)
+        RX packets 916051  bytes 117582658 (117.5 MB)
+        RX errors 0  dropped 0  overruns 0  frame 0
+        TX packets 916051  bytes 117582658 (117.5 MB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+wlp1s0: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 10.42.0.1  netmask 255.255.255.0  broadcast 10.42.0.255
+        inet6 fe80::6f77:f3e8:6d20:943b  prefixlen 64  scopeid 0x20<link>
+        ether a8:96:09:13:a1:0c  txqueuelen 1000  (Ethernet)
+        RX packets 2786866  bytes 1611160628 (1.6 GB)
+        RX errors 0  dropped 199  overruns 0  frame 0
+        TX packets 5249757  bytes 6921407563 (6.9 GB)
+        TX errors 0  dropped 0 overruns 0  carrier 0  collisions 0
+
+jasonc1025@BMax-B1Pro:~/Jwc-25-0514-2300-Bmax_B1Pro-Ubuntu_22/12j-Db/Dropbox/09k-E32-SM/25-0517-1900-E32--OPENED-25-0803-0830-MoveToDb/13i-T-CameraPlus-S3-NOW-Ubuntu22_BmaxB1Pro--25-0505-0730-NOW/examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW/25-1122-2000-Important-SendDataToGdevelop$ ip addr show
+1: lo: <LOOPBACK,UP,LOWER_UP> mtu 65536 qdisc noqueue state UNKNOWN group default qlen 1000
+    link/loopback 00:00:00:00:00:00 brd 00:00:00:00:00:00
+    inet 127.0.0.1/8 scope host lo
+       valid_lft forever preferred_lft forever
+    inet6 ::1/128 scope host 
+       valid_lft forever preferred_lft forever
+2: enp2s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc fq_codel state UP group default qlen 1000
+    link/ether 00:e0:4c:38:ce:c4 brd ff:ff:ff:ff:ff:ff
+    inet 10.0.0.220/24 brd 10.0.0.255 scope global dynamic noprefixroute enp2s0
+       valid_lft 172489sec preferred_lft 172489sec
+    inet6 2601:647:4400:2dd2::fb11/128 scope global dynamic noprefixroute 
+       valid_lft 345276sec preferred_lft 345276sec
+    inet6 2601:647:4400:2dd2:87b5:13d2:9dbc:83dd/64 scope global temporary dynamic 
+       valid_lft 299sec preferred_lft 299sec
+    inet6 2601:647:4400:2dd2:8613:ccaa:f1f5:5399/64 scope global dynamic mngtmpaddr noprefixroute 
+       valid_lft 299sec preferred_lft 299sec
+    inet6 fe80::3f3a:d3e6:1e72:76a5/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+3: wlp1s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether a8:96:09:13:a1:0c brd ff:ff:ff:ff:ff:ff
+    inet 10.42.0.1/24 brd 10.42.0.255 scope global noprefixroute wlp1s0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::6f77:f3e8:6d20:943b/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
+jasonc1025@BMax-B1Pro:~/Jwc-25-0514-2300-Bmax_B1Pro-Ubuntu_22/12j-Db/Dropbox/09k-E32-SM/25-0517-1900-E32--OPENED-25-0803-0830-MoveToDb/13i-T-CameraPlus-S3-NOW-Ubuntu22_BmaxB1Pro--25-0505-0730-NOW/examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW/25-1122-2000-Important-SendDataToGdevelop$ ip addr show wlp1s0
+3: wlp1s0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500 qdisc noqueue state UP group default qlen 1000
+    link/ether a8:96:09:13:a1:0c brd ff:ff:ff:ff:ff:ff
+    inet 10.42.0.1/24 brd 10.42.0.255 scope global noprefixroute wlp1s0
+       valid_lft forever preferred_lft forever
+    inet6 fe80::6f77:f3e8:6d20:943b/64 scope link noprefixroute 
+       valid_lft forever preferred_lft forever
