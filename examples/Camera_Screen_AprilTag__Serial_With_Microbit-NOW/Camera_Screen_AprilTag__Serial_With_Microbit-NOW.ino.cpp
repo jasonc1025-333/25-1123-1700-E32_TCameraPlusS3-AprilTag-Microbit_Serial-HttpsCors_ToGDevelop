@@ -200,35 +200,35 @@ int queue_count = 0;  // Number of events in queue
 // HTTP Server on port 80
 AsyncWebServer server(80);
 
-//// jwc 25-1123-1800 Network latency measurement
+//// jwc 25-1123-1800 Network latency measurement (microseconds for precision)
 // Tracks round-trip time for HTTP requests
 struct NetworkLatencyStats {
-    unsigned long current_ms = 0;     // Most recent latency
-    unsigned long min_ms = 99999;     // Minimum latency observed
-    unsigned long max_ms = 0;         // Maximum latency observed
-    unsigned long total_ms = 0;       // Sum of all latencies (for average)
+    unsigned long current_us = 0;     // Most recent latency in microseconds
+    unsigned long min_us = 999999;    // Minimum latency observed (us)
+    unsigned long max_us = 0;         // Maximum latency observed (us)
+    unsigned long total_us = 0;       // Sum of all latencies (us)
     unsigned long count = 0;          // Number of successful measurements
     
-    // Calculate average latency
+    // Calculate average latency in microseconds
     unsigned long getAverage() {
-        return (count > 0) ? (total_ms / count) : 0;
+        return (count > 0) ? (total_us / count) : 0;
     }
     
-    // Update statistics with new measurement
-    void update(unsigned long latency_ms) {
-        current_ms = latency_ms;
-        if (latency_ms < min_ms) min_ms = latency_ms;
-        if (latency_ms > max_ms) max_ms = latency_ms;
-        total_ms += latency_ms;
+    // Update statistics with new measurement (in microseconds)
+    void update(unsigned long latency_us) {
+        current_us = latency_us;
+        if (latency_us < min_us) min_us = latency_us;
+        if (latency_us > max_us) max_us = latency_us;
+        total_us += latency_us;
         count++;
     }
     
     // Reset statistics
     void reset() {
-        current_ms = 0;
-        min_ms = 99999;
-        max_ms = 0;
-        total_ms = 0;
+        current_us = 0;
+        min_us = 999999;
+        max_us = 0;
+        total_us = 0;
         count = 0;
     }
 } network_latency;
@@ -246,7 +246,7 @@ void queueTagEvent(int id, float yaw, float pitch, float roll, float x_cm, float
 }
 
 // Build JSON response from queue with latency stats
-String getEventsJSON(unsigned long request_start_ms) {
+String getEventsJSON(unsigned long request_start_us) {
     // Start JSON response
     String json = "{";
     
@@ -278,18 +278,23 @@ String getEventsJSON(unsigned long request_start_ms) {
     // Close JSON response with remaining queue count
     json += "\"queue_remaining\":" + String(queue_count) + "}";
     
-    // Calculate processing latency
-    unsigned long processing_ms = millis() - request_start_ms;
+    // Calculate processing latency in microseconds
+    unsigned long processing_us = micros() - request_start_us;
     
     // Update latency statistics
-    network_latency.update(processing_ms);
+    network_latency.update(processing_us);
     
     // Log latency to console only if events were sent (not in JSON response)
     if (has_tag) {
         //// jwc 25-1124-2020 printf("\n");
-        printf("\n>>> >>> >>> HTTP GET: Send Stats:: 1 event | Latency: %lums (min:%lu avg:%lu max:%lu)\n", 
-               processing_ms, network_latency.min_ms, 
-               network_latency.getAverage(), network_latency.max_ms);
+        // Convert to milliseconds for display (with decimal precision)
+        float current_ms = network_latency.current_us / 1000.0;
+        float min_ms = network_latency.min_us / 1000.0;
+        float avg_ms = network_latency.getAverage() / 1000.0;
+        float max_ms = network_latency.max_us / 1000.0;
+        
+        printf("\n>>> >>> >>> HTTP GET: Send Stats:: 1 event | Latency: %.2fms (min:%.2f avg:%.2f max:%.2f)\n", 
+               current_ms, min_ms, avg_ms, max_ms);
         printf(">>> >>> >>> HTTP GET: Send Data:: %s\n", json.c_str());
         printf("\n");
     }
@@ -416,11 +421,11 @@ void initWiFi() {
         
         // Setup HTTP GET endpoint for GDevelop to poll
         server.on("/smartcam_data", HTTP_GET, [](AsyncWebServerRequest *request){
-            // Start latency measurement
-            unsigned long request_start_ms = millis();
+            // Start latency measurement (using micros for precision)
+            unsigned long request_start_us = micros();
             
             // Enable CORS for GDevelop
-            AsyncWebServerResponse *response = request->beginResponse(200, "application/json", getEventsJSON(request_start_ms));
+            AsyncWebServerResponse *response = request->beginResponse(200, "application/json", getEventsJSON(request_start_us));
             response->addHeader("Access-Control-Allow-Origin", "*");
             response->addHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
             response->addHeader("Access-Control-Allow-Headers", "Content-Type");
