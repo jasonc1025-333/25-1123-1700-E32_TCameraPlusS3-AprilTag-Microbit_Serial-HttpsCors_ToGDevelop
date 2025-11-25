@@ -198,6 +198,39 @@ int queue_count = 0;  // Number of events in queue
 // HTTP Server on port 80
 AsyncWebServer server(80);
 
+//// jwc 25-1123-1800 Network latency measurement
+// Tracks round-trip time for HTTP requests
+struct NetworkLatencyStats {
+    unsigned long current_ms = 0;     // Most recent latency
+    unsigned long min_ms = 99999;     // Minimum latency observed
+    unsigned long max_ms = 0;         // Maximum latency observed
+    unsigned long total_ms = 0;       // Sum of all latencies (for average)
+    unsigned long count = 0;          // Number of successful measurements
+    
+    // Calculate average latency
+    unsigned long getAverage() {
+        return (count > 0) ? (total_ms / count) : 0;
+    }
+    
+    // Update statistics with new measurement
+    void update(unsigned long latency_ms) {
+        current_ms = latency_ms;
+        if (latency_ms < min_ms) min_ms = latency_ms;
+        if (latency_ms > max_ms) max_ms = latency_ms;
+        total_ms += latency_ms;
+        count++;
+    }
+    
+    // Reset statistics
+    void reset() {
+        current_ms = 0;
+        min_ms = 99999;
+        max_ms = 0;
+        total_ms = 0;
+        count = 0;
+    }
+} network_latency;
+
 // Add event to circular buffer
 void queueTagEvent(int id, float yaw, float pitch, float roll, float x_cm, float y_cm, float z_cm) {
     if (queue_count < MAX_EVENTS) {
@@ -210,20 +243,20 @@ void queueTagEvent(int id, float yaw, float pitch, float roll, float x_cm, float
     }
 }
 
-// Build JSON response from queue
-String getEventsJSON() {
-    String json = "{\"events\":[";
+// Build JSON response from queue with latency stats
+String getEventsJSON(unsigned long request_start_ms) {
+    // Start JSON with smartcam_ip
+    String json = "{\"smartcam_ip\":\"" + WiFi.localIP().toString() + "\",\"tags_data\":[";
     
     // Calculate read position (oldest event)
     int read_pos = (queue_head - queue_count + MAX_EVENTS) % MAX_EVENTS;
-    
     // Build JSON array
     for (int i = 0; i < queue_count; i++) {
         if (i > 0) json += ",";
         
         TagEvent& evt = event_queue[read_pos];
         json += "{";
-        json += "\"id\":" + String(evt.id) + ",";
+        json += "\"tag_id\":" + String(evt.id) + ",";
         json += "\"yaw\":" + String(evt.yaw, 1) + ",";
         json += "\"pitch\":" + String(evt.pitch, 1) + ",";
         json += "\"roll\":" + String(evt.roll, 1) + ",";
@@ -236,13 +269,28 @@ String getEventsJSON() {
         read_pos = (read_pos + 1) % MAX_EVENTS;
     }
     
-    json += "],\"count\":" + String(queue_count) + "}";
+    // Close JSON response
+    json += "],\"tags_count\":" + String(queue_count) + "}";
     
     // Clear queue after building JSON
     int sent_count = queue_count;
     queue_count = 0;
     
-    printf("*** HTTP: Sent %d events to GDevelop (queue cleared)\n", sent_count);
+    // Calculate processing latency
+    unsigned long processing_ms = millis() - request_start_ms;
+    
+    // Update latency statistics
+    network_latency.update(processing_ms);
+    
+    // Log latency to console only if events were sent (not in JSON response)
+    if (sent_count > 0) {
+        printf("\n");
+        printf("\n>>> >>> >>> HTTP GET: Send Stats:: %d events | Latency: %lums (min:%lu avg:%lu max:%lu)\n", 
+               sent_count, processing_ms, network_latency.min_ms, 
+               network_latency.getAverage(), network_latency.max_ms);
+        printf(">>> >>> >>> HTTP GET: Send Data:: %s\n", json.c_str());
+        printf("\n");
+    }
     
     return json;
 }
@@ -339,39 +387,6 @@ struct LatestTagData {
     unsigned long timestamp = 0;
 } latest_tag;
 
-//// jwc 25-1123-1800 Network latency measurement
-// Tracks round-trip time for HTTP requests
-struct NetworkLatencyStats {
-    unsigned long current_ms = 0;     // Most recent latency
-    unsigned long min_ms = 99999;     // Minimum latency observed
-    unsigned long max_ms = 0;         // Maximum latency observed
-    unsigned long total_ms = 0;       // Sum of all latencies (for average)
-    unsigned long count = 0;          // Number of successful measurements
-    
-    // Calculate average latency
-    unsigned long getAverage() {
-        return (count > 0) ? (total_ms / count) : 0;
-    }
-    
-    // Update statistics with new measurement
-    void update(unsigned long latency_ms) {
-        current_ms = latency_ms;
-        if (latency_ms < min_ms) min_ms = latency_ms;
-        if (latency_ms > max_ms) max_ms = latency_ms;
-        total_ms += latency_ms;
-        count++;
-    }
-    
-    // Reset statistics
-    void reset() {
-        current_ms = 0;
-        min_ms = 99999;
-        max_ms = 0;
-        total_ms = 0;
-        count = 0;
-    }
-} network_latency;
-
 //// jwc 25-1121-1700 Forward declaration for gfx (defined later in file)
 extern Arduino_TFT *gfx;
 
@@ -394,22 +409,24 @@ void initWiFi() {
     
     if (WiFi.status() == WL_CONNECTED) {
         wifi_connected = true;
-        printf("\n*** WiFi Connected! IP: %s\n", WiFi.localIP().toString().c_str());
-        printf("*** HTTP Server: http://%s/events (for GDevelop polling)\n", WiFi.localIP().toString().c_str());
+        printf("\n*** WiFi Connected! SmartCam-IP: %s\n", WiFi.localIP().toString().c_str());
+        printf("*** HTTP Server: http://%s/smartcam_data (for GDevelop polling)\n", WiFi.localIP().toString().c_str());
         
         // Setup HTTP GET endpoint for GDevelop to poll
-        server.on("/events", HTTP_GET, [](AsyncWebServerRequest *request){
+        server.on("/smartcam_data", HTTP_GET, [](AsyncWebServerRequest *request){
+            // Start latency measurement
+            unsigned long request_start_ms = millis();
+            
             // Enable CORS for GDevelop
-            AsyncWebServerResponse *response = request->beginResponse(200, "application/json", getEventsJSON());
+            AsyncWebServerResponse *response = request->beginResponse(200, "application/json", getEventsJSON(request_start_ms));
             response->addHeader("Access-Control-Allow-Origin", "*");
             response->addHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
             response->addHeader("Access-Control-Allow-Headers", "Content-Type");
             request->send(response);
-            printf("*** HTTP GET: Sent events to GDevelop\n");
         });
         
         // Handle CORS preflight
-        server.on("/events", HTTP_OPTIONS, [](AsyncWebServerRequest *request){
+        server.on("/smartcam_data", HTTP_OPTIONS, [](AsyncWebServerRequest *request){
             AsyncWebServerResponse *response = request->beginResponse(200);
             response->addHeader("Access-Control-Allow-Origin", "*");
             response->addHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
@@ -784,7 +801,7 @@ bool OV2640_Initialization(void)
             printf("\n");
             gfx->print("camera model:");
             gfx->println(sinfo->name);
-           gfx ->println();
+            gfx->println();
         }
     }
     // initial sensors are flipped vertically and colors are a bit saturated
