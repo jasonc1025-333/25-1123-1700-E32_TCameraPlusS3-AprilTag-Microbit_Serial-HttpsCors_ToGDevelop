@@ -178,10 +178,10 @@ const char* WIFI_PASSWORD = "Jesus333!";
 
 //// jwc 25-1124-1630 Event Queue for GDevelop polling
 // Circular buffer for tag detection events
-const int MAX_EVENTS = 50;  // Buffer size (50 events = ~1.6KB RAM)
+const int tagData_MAX = 50;  // Buffer size (50 events = ~1.6KB RAM)
 
-struct TagEvent {
-    int id;
+struct tagData_Struct {
+    int tag_id;
     float yaw;
     float pitch;
     float roll;
@@ -193,7 +193,7 @@ struct TagEvent {
     unsigned long timestamp;
 };
 
-TagEvent event_queue[MAX_EVENTS];
+tagData_Struct tagData_Queue[tagData_MAX];
 int queue_head = 0;   // Write position
 int queue_count = 0;  // Number of events in queue
 
@@ -235,11 +235,11 @@ struct NetworkLatencyStats {
 
 // Add event to circular buffer
 void queueTagEvent(int id, float yaw, float pitch, float roll, float x_cm, float y_cm, float z_cm, float tag_size_percent, float distance_cm) {
-    if (queue_count < MAX_EVENTS) {
-        event_queue[queue_head] = {id, yaw, pitch, roll, x_cm, y_cm, z_cm, tag_size_percent, distance_cm, millis()};
-        queue_head = (queue_head + 1) % MAX_EVENTS;
+    if (queue_count < tagData_MAX) {
+        tagData_Queue[queue_head] = {id, yaw, pitch, roll, x_cm, y_cm, z_cm, tag_size_percent, distance_cm, millis()};
+        queue_head = (queue_head + 1) % tagData_MAX;
         queue_count++;
-        printf("*** QUEUE: Event added - Tag ID:%d (queue size:%d/%d)\n", id, queue_count, MAX_EVENTS);
+        printf("*** QUEUE: Event added - Tag ID:%d (queue size:%d/%d)\n", id, queue_count, tagData_MAX);
     } else {
         printf("*** QUEUE: FULL! Event dropped (Tag ID:%d)\n", id);
     }
@@ -247,18 +247,19 @@ void queueTagEvent(int id, float yaw, float pitch, float roll, float x_cm, float
 
 // Build JSON response from queue with latency stats
 String getEventsJSON(unsigned long request_start_ms) {
-    // Start JSON with smartcam_ip
-    String json = "{\"smartcam_ip\":\"" + WiFi.localIP().toString() + "\",\"tags_data\":[";
+    // Start JSON response
+    String json = "{";
     
-    // Calculate read position (oldest event)
-    int read_pos = (queue_head - queue_count + MAX_EVENTS) % MAX_EVENTS;
-    // Build JSON array
-    for (int i = 0; i < queue_count; i++) {
-        if (i > 0) json += ",";
+    bool has_tag = false;
+    
+    // Only send 1 event per HTTP GET request (if available)
+    if (queue_count > 0) {
+        // Calculate read position (oldest event)
+        int read_pos = (queue_head - queue_count + tagData_MAX) % tagData_MAX;
         
-        TagEvent& evt = event_queue[read_pos];
-        json += "{";
-        json += "\"tag_id\":" + String(evt.id) + ",";
+        tagData_Struct& evt = tagData_Queue[read_pos];
+        json += "\"smartcam_ip\":\"" + WiFi.localIP().toString() + "\",";
+        json += "\"tag_id\":" + String(evt.tag_id) + ",";
         json += "\"yaw\":" + String(evt.yaw, 1) + ",";
         json += "\"pitch\":" + String(evt.pitch, 1) + ",";
         json += "\"roll\":" + String(evt.roll, 1) + ",";
@@ -267,18 +268,15 @@ String getEventsJSON(unsigned long request_start_ms) {
         json += "\"z_cm\":" + String(evt.z_cm, 1) + ",";
         json += "\"tag_size_percent\":" + String(evt.tag_size_percent, 1) + ",";
         json += "\"distance_cm\":" + String(evt.distance_cm, 1) + ",";
-        json += "\"timestamp\":" + String(evt.timestamp);
-        json += "}";
+        json += "\"timestamp\":" + String(evt.timestamp) + ",";
         
-        read_pos = (read_pos + 1) % MAX_EVENTS;
+        // Remove the sent event from queue
+        queue_count--;
+        has_tag = true;
     }
     
-    // Close JSON response
-    json += "],\"tags_count\":" + String(queue_count) + "}";
-    
-    // Clear queue after building JSON
-    int sent_count = queue_count;
-    queue_count = 0;
+    // Close JSON response with remaining queue count
+    json += "\"queue_remaining\":" + String(queue_count) + "}";
     
     // Calculate processing latency
     unsigned long processing_ms = millis() - request_start_ms;
@@ -287,10 +285,10 @@ String getEventsJSON(unsigned long request_start_ms) {
     network_latency.update(processing_ms);
     
     // Log latency to console only if events were sent (not in JSON response)
-    if (sent_count > 0) {
+    if (has_tag) {
         //// jwc 25-1124-2020 printf("\n");
-        printf("\n>>> >>> >>> HTTP GET: Send Stats:: %d events | Latency: %lums (min:%lu avg:%lu max:%lu)\n", 
-               sent_count, processing_ms, network_latency.min_ms, 
+        printf("\n>>> >>> >>> HTTP GET: Send Stats:: 1 event | Latency: %lums (min:%lu avg:%lu max:%lu)\n", 
+               processing_ms, network_latency.min_ms, 
                network_latency.getAverage(), network_latency.max_ms);
         printf(">>> >>> >>> HTTP GET: Send Data:: %s\n", json.c_str());
         printf("\n");
