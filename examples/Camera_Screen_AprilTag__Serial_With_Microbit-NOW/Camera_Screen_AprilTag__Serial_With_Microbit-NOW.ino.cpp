@@ -160,9 +160,10 @@
 #include "camera_index.h"
 //// jwc o NOT NEEDED?: #include "app_httpd.tpp"
 
-//// jwc 25-1120-0900 Add HTTP client for GDevelop.io integration
+//// jwc 25-1124-1630 Add HTTP server with event queue for direct GDevelop polling
 #include <WiFi.h>
-#include <HTTPClient.h>
+//// jwc 25-1124-1650 y \/ #include <HTTPClient.h>
+#include <ESPAsyncWebServer.h>
 
 // WiFi credentials
 //
@@ -175,6 +176,78 @@ const char* WIFI_SSID = "Chan-Comcast";     // Replace with your WiFi SSID
 
 const char* WIFI_PASSWORD = "Jesus333!";
 
+//// jwc 25-1124-1630 Event Queue for GDevelop polling
+// Circular buffer for tag detection events
+const int MAX_EVENTS = 50;  // Buffer size (50 events = ~1.6KB RAM)
+
+struct TagEvent {
+    int id;
+    float yaw;
+    float pitch;
+    float roll;
+    float x_cm;
+    float y_cm;
+    float z_cm;
+    unsigned long timestamp;
+};
+
+TagEvent event_queue[MAX_EVENTS];
+int queue_head = 0;   // Write position
+int queue_count = 0;  // Number of events in queue
+
+// HTTP Server on port 80
+AsyncWebServer server(80);
+
+// Add event to circular buffer
+void queueTagEvent(int id, float yaw, float pitch, float roll, float x_cm, float y_cm, float z_cm) {
+    if (queue_count < MAX_EVENTS) {
+        event_queue[queue_head] = {id, yaw, pitch, roll, x_cm, y_cm, z_cm, millis()};
+        queue_head = (queue_head + 1) % MAX_EVENTS;
+        queue_count++;
+        printf("*** QUEUE: Event added - Tag ID:%d (queue size:%d/%d)\n", id, queue_count, MAX_EVENTS);
+    } else {
+        printf("*** QUEUE: FULL! Event dropped (Tag ID:%d)\n", id);
+    }
+}
+
+// Build JSON response from queue
+String getEventsJSON() {
+    String json = "{\"events\":[";
+    
+    // Calculate read position (oldest event)
+    int read_pos = (queue_head - queue_count + MAX_EVENTS) % MAX_EVENTS;
+    
+    // Build JSON array
+    for (int i = 0; i < queue_count; i++) {
+        if (i > 0) json += ",";
+        
+        TagEvent& evt = event_queue[read_pos];
+        json += "{";
+        json += "\"id\":" + String(evt.id) + ",";
+        json += "\"yaw\":" + String(evt.yaw, 1) + ",";
+        json += "\"pitch\":" + String(evt.pitch, 1) + ",";
+        json += "\"roll\":" + String(evt.roll, 1) + ",";
+        json += "\"x_cm\":" + String(evt.x_cm, 1) + ",";
+        json += "\"y_cm\":" + String(evt.y_cm, 1) + ",";
+        json += "\"z_cm\":" + String(evt.z_cm, 1) + ",";
+        json += "\"timestamp\":" + String(evt.timestamp);
+        json += "}";
+        
+        read_pos = (read_pos + 1) % MAX_EVENTS;
+    }
+    
+    json += "],\"count\":" + String(queue_count) + "}";
+    
+    // Clear queue after building JSON
+    int sent_count = queue_count;
+    queue_count = 0;
+    
+    printf("*** HTTP: Sent %d events to GDevelop (queue cleared)\n", sent_count);
+    
+    return json;
+}
+
+//// jwc 25-1124-1640 OLD HTTP POST CODE - TO BE REMOVED IN NEXT STEPS
 // Server URL
 //
 //// jwc 25-1120-0910 HTTP Server Configuration - matching TestServer
@@ -302,14 +375,15 @@ struct NetworkLatencyStats {
 //// jwc 25-1121-1700 Forward declaration for gfx (defined later in file)
 extern Arduino_TFT *gfx;
 
-//// jwc 25-1121-1700 WiFi and HTTP Functions
+//// jwc 25-1124-1700 WiFi and HTTP Server Setup
 void initWiFi() {
     printf("*** WiFi Init: Starting...\n");
     printf("*** WiFi SSID: %s\n", WIFI_SSID);
     printf("*** WiFi Password: %s\n", WIFI_PASSWORD);
     printf("*** WiFi Band: 2.4GHz (ESP32 only supports 2.4GHz)\n");
-    printf("*** Server URL: %s\n", TEST_SERVER_URL);
-    printf("*** HTTP Send Interval: %lu ms (%0.1f req/sec)\n", HTTP_SEND_INTERVAL_MS, 1000.0 / HTTP_SEND_INTERVAL_MS);
+    //// jwc 25-1124-1700 printf("*** Server URL: %s\n", TEST_SERVER_URL);
+    //// jwc 25-1124-1700 printf("*** HTTP Send Interval: %lu ms (%0.1f req/sec)\n", HTTP_SEND_INTERVAL_MS, 1000.0 / HTTP_SEND_INTERVAL_MS);
+    
     WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     int attempts = 0;
     while (WiFi.status() != WL_CONNECTED && attempts < 20) {
@@ -321,6 +395,31 @@ void initWiFi() {
     if (WiFi.status() == WL_CONNECTED) {
         wifi_connected = true;
         printf("\n*** WiFi Connected! IP: %s\n", WiFi.localIP().toString().c_str());
+        printf("*** HTTP Server: http://%s/events (for GDevelop polling)\n", WiFi.localIP().toString().c_str());
+        
+        // Setup HTTP GET endpoint for GDevelop to poll
+        server.on("/events", HTTP_GET, [](AsyncWebServerRequest *request){
+            // Enable CORS for GDevelop
+            AsyncWebServerResponse *response = request->beginResponse(200, "application/json", getEventsJSON());
+            response->addHeader("Access-Control-Allow-Origin", "*");
+            response->addHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+            response->addHeader("Access-Control-Allow-Headers", "Content-Type");
+            request->send(response);
+            printf("*** HTTP GET: Sent events to GDevelop\n");
+        });
+        
+        // Handle CORS preflight
+        server.on("/events", HTTP_OPTIONS, [](AsyncWebServerRequest *request){
+            AsyncWebServerResponse *response = request->beginResponse(200);
+            response->addHeader("Access-Control-Allow-Origin", "*");
+            response->addHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+            response->addHeader("Access-Control-Allow-Headers", "Content-Type");
+            request->send(response);
+        });
+        
+        server.begin();
+        printf("*** HTTP Server: Started successfully!\n");
+        
         gfx->setTextSize(2);
         gfx->setCursor(1, 220);
         gfx->printf("WiFi: %s", WiFi.localIP().toString().c_str());
@@ -333,86 +432,89 @@ void initWiFi() {
     }
 }
 
-bool sendAprilTagData(int tag_id, const char* camera_name) {
-    // Check WiFi connection status
-    if (!wifi_connected || WiFi.status() != WL_CONNECTED) {
-        printf("*** HTTP ERROR: WiFi not connected (wifi_connected=%d, WiFi.status()=%d)\n", 
-               wifi_connected, WiFi.status());
-        return false;
-    }
-    
-    unsigned long current_time = millis();
-    
-    //// jwc 25-1123-1800 Start latency measurement
-    unsigned long latency_start_ms = millis();
-    
-    printf("\nvvv HTTP REQUEST START vvv\n");
-    printf("*** HTTP: Target URL: %s\n", TEST_SERVER_URL);
-    printf("*** HTTP: Tag ID: %d, Camera: %s\n", tag_id, camera_name);
-    
-    HTTPClient http;
-    http.begin(TEST_SERVER_URL);
-    http.addHeader("Content-Type", "application/json");
-    http.addHeader("Access-Control-Allow-Origin", "*");
-    http.addHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-    http.addHeader("Access-Control-Allow-Headers", "Content-Type");
-    
-    // Create JSON payload - simple format without ArduinoJson library
-    String json_payload = "{";
-    json_payload += "\"id\":" + String(tag_id) + ",";
-    json_payload += "\"camera_name\":\"" + String(camera_name) + "\",";
-    json_payload += "\"timestamp\":" + String(current_time);
-    json_payload += "}";
-    
-    printf("*** HTTP: Sending JSON payload: %s\n", json_payload.c_str());
-    printf("*** HTTP: Payload size: %d bytes\n", json_payload.length());
-    
-    int httpResponseCode = http.POST(json_payload);
-    
-    //// jwc 25-1123-1800 End latency measurement
-    unsigned long latency_end_ms = millis();
-    unsigned long latency_ms = latency_end_ms - latency_start_ms;
-    
-    if (httpResponseCode > 0) {
-        String response = http.getString();
-        
-        //// jwc 25-1123-1800 Update latency statistics on successful request
-        network_latency.update(latency_ms);
-        
-        printf("*** HTTP SUCCESS: Response Code: %d\n", httpResponseCode);
-        printf("*** HTTP SUCCESS: Server Response: %s\n", response.c_str());
-        printf("*** HTTP LATENCY: Current=%lums, Min=%lums, Max=%lums, Avg=%lums (Count=%lu)\n",
-               network_latency.current_ms,
-               network_latency.min_ms,
-               network_latency.max_ms,
-               network_latency.getAverage(),
-               network_latency.count);
-        printf("^^^ HTTP REQUEST END (SUCCESS) ^^^\n\n");
-        
-        // Show success on display with latency
-        gfx->setTextSize(1);
-        gfx->setCursor(180, 1);
-        gfx->printf("HTTP:%lums", latency_ms);
-        
-        http.end();
-        return true;
-    } else {
-        printf("*** HTTP FAILURE: Error Code: %d\n", httpResponseCode);
-        printf("*** HTTP FAILURE: Possible causes:\n");
-        printf("    - Server not running on %s\n", TEST_SERVER_URL);
-        printf("    - Network connectivity issues\n");
-        printf("    - Firewall blocking port 5000\n");
-        printf("^^^ HTTP REQUEST END (FAILED) ^^^\n\n");
-        
-        // Show error on display
-        gfx->setTextSize(1);
-        gfx->setCursor(200, 1);
-        gfx->printf("HTTP:ERR");
-        
-        http.end();
-        return false;
-    }
-}
+//// jwc 25-1124-1700 OLD HTTP POST CODE - REMOVED (was using HTTPClient)
+//// This has been replaced with HTTP GET server above for direct GDevelop polling
+//// jwc 25-1124-1700 y bool sendAprilTagData(int tag_id, const char* camera_name) {
+//// jwc 25-1124-1700 y     // Check WiFi connection status
+//// jwc 25-1124-1700 y     if (!wifi_connected || WiFi.status() != WL_CONNECTED) {
+//// jwc 25-1124-1700 y         printf("*** HTTP ERROR: WiFi not connected (wifi_connected=%d, WiFi.status()=%d)\n", 
+//// jwc 25-1124-1700 y                wifi_connected, WiFi.status());
+//// jwc 25-1124-1700 y         return false;
+//// jwc 25-1124-1700 y     }
+//// jwc 25-1124-1700 y     
+//// jwc 25-1124-1700 y     unsigned long current_time = millis();
+//// jwc 25-1124-1700 y     
+//// jwc 25-1124-1700 y     //// jwc 25-1123-1800 Start latency measurement
+//// jwc 25-1124-1700 y     unsigned long latency_start_ms = millis();
+//// jwc 25-1124-1700 y     
+//// jwc 25-1124-1700 y     printf("\nvvv HTTP REQUEST START vvv\n");
+//// jwc 25-1124-1700 y     printf("*** HTTP: Target URL: %s\n", TEST_SERVER_URL);
+//// jwc 25-1124-1700 y     printf("*** HTTP: Tag ID: %d, Camera: %s\n", tag_id, camera_name);
+//// jwc 25-1124-1700 y     
+//// jwc 25-1124-1700 y     HTTPClient http;
+//// jwc 25-1124-1700 y     http.begin(TEST_SERVER_URL);
+//// jwc 25-1124-1700 y     http.addHeader("Content-Type", "application/json");
+//// jwc 25-1124-1700 y     http.addHeader("Access-Control-Allow-Origin", "*");
+//// jwc 25-1124-1700 y     http.addHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+//// jwc 25-1124-1700 y     http.addHeader("Access-Control-Allow-Headers", "Content-Type");
+//// jwc 25-1124-1700 y     
+//// jwc 25-1124-1700 y     // Create JSON payload - simple format without ArduinoJson library
+//// jwc 25-1124-1700 y     String json_payload = "{";
+//// jwc 25-1124-1700 y     json_payload += "\"id\":" + String(tag_id) + ",";
+//// jwc 25-1124-1700 y     json_payload += "\"camera_name\":\"" + String(camera_name) + "\",";
+//// jwc 25-1124-1700 y     json_payload += "\"timestamp\":" + String(current_time);
+//// jwc 25-1124-1700 y     json_payload += "}";
+//// jwc 25-1124-1700 y     
+//// jwc 25-1124-1700 y     printf("*** HTTP: Sending JSON payload: %s\n", json_payload.c_str());
+//// jwc 25-1124-1700 y     printf("*** HTTP: Payload size: %d bytes\n", json_payload.length());
+//// jwc 25-1124-1700 y     
+//// jwc 25-1124-1700 y     int httpResponseCode = http.POST(json_payload);
+//// jwc 25-1124-1700 y     
+//// jwc 25-1124-1700 y     //// jwc 25-1123-1800 End latency measurement
+//// jwc 25-1124-1700 y     unsigned long latency_end_ms = millis();
+//// jwc 25-1124-1700 y     unsigned long latency_ms = latency_end_ms - latency_start_ms;
+//// jwc 25-1124-1700 y     
+//// jwc 25-1124-1700 y     if (httpResponseCode > 0) {
+//// jwc 25-1124-1700 y         String response = http.getString();
+//// jwc 25-1124-1700 y         
+//// jwc 25-1124-1700 y         //// jwc 25-1123-1800 Update latency statistics on successful request
+//// jwc 25-1124-1700 y         network_latency.update(latency_ms);
+//// jwc 25-1124-1700 y         
+//// jwc 25-1124-1700 y         printf("*** HTTP SUCCESS: Response Code: %d\n", httpResponseCode);
+//// jwc 25-1124-1700 y         printf("*** HTTP SUCCESS: Server Response: %s\n", response.c_str());
+//// jwc 25-1124-1700 y         printf("*** HTTP LATENCY: Current=%lums, Min=%lums, Max=%lums, Avg=%lums (Count=%lu)\n",
+//// jwc 25-1124-1700 y                network_latency.current_ms,
+//// jwc 25-1124-1700 y                network_latency.min_ms,
+//// jwc 25-1124-1700 y                network_latency.max_ms,
+//// jwc 25-1124-1700 y                network_latency.getAverage(),
+//// jwc 25-1124-1700 y                network_latency.count);
+//// jwc 25-1124-1700 y         printf("^^^ HTTP REQUEST END (SUCCESS) ^^^\n\n");
+//// jwc 25-1124-1700 y         
+//// jwc 25-1124-1700 y         // Show success on display with latency
+//// jwc 25-1124-1700 y         gfx->setTextSize(1);
+//// jwc 25-1124-1700 y         gfx->setCursor(180, 1);
+//// jwc 25-1124-1700 y         gfx->printf("HTTP:%lums", latency_ms);
+//// jwc 25-1124-1700 y         
+//// jwc 25-1124-1700 y         http.end();
+//// jwc 25-1124-1700 y         return true;
+//// jwc 25-1124-1700 y     } else {
+//// jwc 25-1124-1700 y         printf("*** HTTP FAILURE: Error Code: %d\n", httpResponseCode);
+//// jwc 25-1124-1700 y         printf("*** HTTP FAILURE: Possible causes:\n");
+//// jwc 25-1124-1700 y         printf("    - Server not running on %s\n", TEST_SERVER_URL);
+//// jwc 25-1124-1700 y         printf("    - Network connectivity issues\n");
+//// jwc 25-1124-1700 y         printf("    - Firewall blocking port 5000\n");
+//// jwc 25-1124-1700 y         printf("^^^ HTTP REQUEST END (FAILED) ^^^\n\n");
+//// jwc 25-1124-1700 y         
+//// jwc 25-1124-1700 y         // Show error on display
+//// jwc 25-1124-1700 y         gfx->setTextSize(1);
+//// jwc 25-1124-1700 y         gfx->setCursor(200, 1);
+//// jwc 25-1124-1700 y         gfx->printf("HTTP:ERR");
+//// jwc 25-1124-1700 y         
+//// jwc 25-1124-1700 y         http.end();
+//// jwc 25-1124-1700 y         return false;
+//// jwc 25-1124-1700 y     }
+//// jwc 25-1124-1700 y }
+
 
 //// \/ jwc 25-0411-1800 convert to April-Tag Detect 
 
@@ -1022,22 +1124,31 @@ void loop()
                     // Free the matrices
                     matd_destroy(R_transpose);
                     matd_destroy(camera_position);
+
+                    //// jwc 25-1124-1700 y //// jwc 25-1123-0750 Buffer tag data instead of sending HTTP immediately
+                    //// jwc 25-1124-1700 y // This allows screen to update at full speed without blocking
+                    //// jwc 25-1124-1700 y sensor_t *s = esp_camera_sensor_get();
+                    //// jwc 25-1124-1700 y if (s) {
+                    //// jwc 25-1124-1700 y     camera_sensor_info_t *sinfo = esp_camera_sensor_get_info(&(s->id));
+                    //// jwc 25-1124-1700 y     if (sinfo) {
+                    //// jwc 25-1124-1700 y         // Save to buffer (instant, no network delay)
+                    //// jwc 25-1124-1700 y         latest_tag.has_data = true;
+                    //// jwc 25-1124-1700 y         latest_tag.tag_id = det->id;
+                    //// jwc 25-1124-1700 y         strncpy(latest_tag.camera_name, sinfo->name, sizeof(latest_tag.camera_name) - 1);
+                    //// jwc 25-1124-1700 y         latest_tag.camera_name[sizeof(latest_tag.camera_name) - 1] = '\0';
+                    //// jwc 25-1124-1700 y         latest_tag.timestamp = millis();
+                    //// jwc 25-1124-1700 y         printf("*** Tag buffered: ID=%d, Camera=%s (will send later)\n", det->id, sinfo->name);
+                    //// jwc 25-1124-1700 y     }
+                    //// jwc 25-1124-1700 y }
+
+                    //// jwc 25-1124-1730 NEW: Queue event for GDevelop polling
+                    // Convert meters to centimeters for x,y,z
+                    float x_cm = MATD_EL(camera_position, 0, 0) * 100.0;
+                    float y_cm = MATD_EL(camera_position, 1, 0) * 100.0;
+                    float z_cm = MATD_EL(camera_position, 2, 0) * 100.0;
                     
-                    //// jwc 25-1123-0750 Buffer tag data instead of sending HTTP immediately
-                    // This allows screen to update at full speed without blocking
-                    sensor_t *s = esp_camera_sensor_get();
-                    if (s) {
-                        camera_sensor_info_t *sinfo = esp_camera_sensor_get_info(&(s->id));
-                        if (sinfo) {
-                            // Save to buffer (instant, no network delay)
-                            latest_tag.has_data = true;
-                            latest_tag.tag_id = det->id;
-                            strncpy(latest_tag.camera_name, sinfo->name, sizeof(latest_tag.camera_name) - 1);
-                            latest_tag.camera_name[sizeof(latest_tag.camera_name) - 1] = '\0';
-                            latest_tag.timestamp = millis();
-                            printf("*** Tag buffered: ID=%d, Camera=%s (will send later)\n", det->id, sinfo->name);
-                        }
-                    }
+                    // Queue the event (instant, no network delay)
+                    queueTagEvent(det->id, yaw, pitch, roll, x_cm, y_cm, z_cm);
                     
             #if DEBUG >= 2    
                     //// jwc o Serial.println("");
@@ -1219,32 +1330,37 @@ void loop()
 
     }
     
-    //// jwc 25-1123-0750 PERIODIC HTTP SENDER - Non-blocking, separate from screen updates
-    // Check if it's time to send buffered tag data via HTTP
-    unsigned long current_time = millis();
-    if (latest_tag.has_data && 
-        (current_time - last_http_send_time >= HTTP_SEND_INTERVAL_MS)) {
-        
-        printf("\n*** HTTP: Time to send buffered data (every %lu ms)...\n", HTTP_SEND_INTERVAL_MS);
-        
-        // Send the buffered tag data
-        bool http_success = sendAprilTagData(
-            latest_tag.tag_id, 
-            latest_tag.camera_name
-        );
-        
-        if (http_success) {
-            printf(">>> >>> HTTP SEND: YES * Tag ID %d\n\n", latest_tag.tag_id);
-        } else {
-            printf(">>> >>> HTTP SEND: NOT * Tag ID %d\n\n", latest_tag.tag_id);
-        }
-        
-        printf("\n");
+    //// jwc 25-1124-1800 OLD HTTP POST CODE REMOVED
+    //// All AprilTag events are now queued and served via HTTP GET at /events endpoint
+    //// GDevelop polls this endpoint to retrieve events (no need for ESP32 to initiate HTTP POST)
+    ////
+    //// jwc 25-1124-1700 y //// jwc 25-1123-0750 PERIODIC HTTP SENDER - Non-blocking, separate from screen updates
+    //// jwc 25-1124-1700 y // Check if it's time to send buffered tag data via HTTP
+    //// jwc 25-1124-1700 y unsigned long current_time = millis();
+    //// jwc 25-1124-1700 y if (latest_tag.has_data && 
+    //// jwc 25-1124-1700 y     (current_time - last_http_send_time >= HTTP_SEND_INTERVAL_MS)) {
+    //// jwc 25-1124-1700 y     
+    //// jwc 25-1124-1700 y     printf("\n*** HTTP: Time to send buffered data (every %lu ms)...\n", HTTP_SEND_INTERVAL_MS);
+    //// jwc 25-1124-1700 y     
+    //// jwc 25-1124-1700 y     // Send the buffered tag data
+    //// jwc 25-1124-1700 y     bool http_success = sendAprilTagData(
+    //// jwc 25-1124-1700 y         latest_tag.tag_id, 
+    //// jwc 25-1124-1700 y         latest_tag.camera_name
+    //// jwc 25-1124-1700 y     );
+    //// jwc 25-1124-1700 y     
+    //// jwc 25-1124-1700 y     if (http_success) {
+    //// jwc 25-1124-1700 y         printf(">>> >>> HTTP SEND: YES * Tag ID %d\n\n", latest_tag.tag_id);
+    //// jwc 25-1124-1700 y     } else {
+    //// jwc 25-1124-1700 y         printf(">>> >>> HTTP SEND: NOT * Tag ID %d\n\n", latest_tag.tag_id);
+    //// jwc 25-1124-1700 y     }
+    //// jwc 25-1124-1700 y     
+    //// jwc 25-1124-1700 y     printf("\n");
+//// jwc 25-1124-1700 y 
+    //// jwc 25-1124-1700 y     // Update last send time (whether success or failure)
+    //// jwc 25-1124-1700 y     last_http_send_time = current_time;
+    //// jwc 25-1124-1700 y     
+    //// jwc 25-1124-1700 y     // Clear buffer after sending
+    //// jwc 25-1124-1700 y     latest_tag.has_data = false;
+    //// jwc 25-1124-1700 y }   
 
-        // Update last send time (whether success or failure)
-        last_http_send_time = current_time;
-        
-        // Clear buffer after sending
-        latest_tag.has_data = false;
-    }   
 }
