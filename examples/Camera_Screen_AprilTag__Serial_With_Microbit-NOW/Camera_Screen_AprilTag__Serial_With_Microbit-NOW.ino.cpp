@@ -188,6 +188,8 @@ struct TagEvent {
     float x_cm;
     float y_cm;
     float z_cm;
+    float tag_size_percent;
+    float distance_cm;
     unsigned long timestamp;
 };
 
@@ -232,9 +234,9 @@ struct NetworkLatencyStats {
 } network_latency;
 
 // Add event to circular buffer
-void queueTagEvent(int id, float yaw, float pitch, float roll, float x_cm, float y_cm, float z_cm) {
+void queueTagEvent(int id, float yaw, float pitch, float roll, float x_cm, float y_cm, float z_cm, float tag_size_percent, float distance_cm) {
     if (queue_count < MAX_EVENTS) {
-        event_queue[queue_head] = {id, yaw, pitch, roll, x_cm, y_cm, z_cm, millis()};
+        event_queue[queue_head] = {id, yaw, pitch, roll, x_cm, y_cm, z_cm, tag_size_percent, distance_cm, millis()};
         queue_head = (queue_head + 1) % MAX_EVENTS;
         queue_count++;
         printf("*** QUEUE: Event added - Tag ID:%d (queue size:%d/%d)\n", id, queue_count, MAX_EVENTS);
@@ -263,6 +265,8 @@ String getEventsJSON(unsigned long request_start_ms) {
         json += "\"x_cm\":" + String(evt.x_cm, 1) + ",";
         json += "\"y_cm\":" + String(evt.y_cm, 1) + ",";
         json += "\"z_cm\":" + String(evt.z_cm, 1) + ",";
+        json += "\"tag_size_percent\":" + String(evt.tag_size_percent, 1) + ",";
+        json += "\"distance_cm\":" + String(evt.distance_cm, 1) + ",";
         json += "\"timestamp\":" + String(evt.timestamp);
         json += "}";
         
@@ -284,7 +288,7 @@ String getEventsJSON(unsigned long request_start_ms) {
     
     // Log latency to console only if events were sent (not in JSON response)
     if (sent_count > 0) {
-        printf("\n");
+        //// jwc 25-1124-2020 printf("\n");
         printf("\n>>> >>> >>> HTTP GET: Send Stats:: %d events | Latency: %lums (min:%lu avg:%lu max:%lu)\n", 
                sent_count, processing_ms, network_latency.min_ms, 
                network_latency.getAverage(), network_latency.max_ms);
@@ -1164,13 +1168,21 @@ void loop()
                     float y_cm = MATD_EL(camera_position, 1, 0) * 100.0;
                     float z_cm = MATD_EL(camera_position, 2, 0) * 100.0;
                     
+                    // Calculate distance from camera to tag (absolute value of z-coordinate)
+                    float distance_cm = fabs(MATD_EL(camera_position, 2, 0)) * 100.0;
+                    
+                    // Calculate tag size percentage of display
+                    // Tag corners span from p[0] to p[2] (diagonal)
+                    float tag_width_px = sqrt(pow(det->p[2][0] - det->p[0][0], 2) + pow(det->p[2][1] - det->p[0][1], 2));
+                    float screen_diagonal_px = sqrt(pow(frame->width, 2) + pow(frame->height, 2));
+                    float tag_size_percent = (tag_width_px / screen_diagonal_px) * 100.0;
+                    
                     // Queue the event (instant, no network delay)
-                    queueTagEvent(det->id, yaw, pitch, roll, x_cm, y_cm, z_cm);
+                    queueTagEvent(det->id, yaw, pitch, roll, x_cm, y_cm, z_cm, tag_size_percent, distance_cm);
                     
             #if DEBUG >= 2    
-                    //// jwc o Serial.println("");
-                    printf("!\n");
-            #endif         
+                    printf("*** Tag queued: size=%.1f%% of screen, distance=%.1fcm\n", tag_size_percent, distance_cm);
+            #endif
                     }
             #if DEBUG >= 2    
                     //// jwc o Serial.println("");
