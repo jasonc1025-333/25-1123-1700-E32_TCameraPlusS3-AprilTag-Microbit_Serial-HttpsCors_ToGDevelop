@@ -235,28 +235,34 @@ struct NetworkLatencyStats {
     }
 } network_latency;
 
-//// jwc 25-1126-2200 OPTION 2: Queue functions (ARCHIVED)
-//// jwc 25-1126-2200 // Add event to circular buffer
-//// jwc 25-1126-2200 void queueTagEvent(int id, float yaw, float pitch, float roll, float x_cm, float y_cm, float z_cm, float tag_size_percent, float distance_cm) {
-//// jwc 25-1126-2200     if (queue_count < tagData_MAX) {
-//// jwc 25-1126-2200         unsigned long timestamp = millis();
-//// jwc 25-1126-2200         tagData_Queue[queue_head] = {id, yaw, pitch, roll, x_cm, y_cm, z_cm, tag_size_percent, distance_cm, timestamp};
-//// jwc 25-1126-2200         queue_head = (queue_head + 1) % tagData_MAX;
-//// jwc 25-1126-2200         queue_count++;
-//// jwc 25-1126-2200         
-//// jwc 25-1126-2200         // Debug print with full message content
-//// jwc 25-1126-2200         printf("\n");
-//// jwc 25-1126-2200         printf("📥 QUEUED: Tag ID=%d, IP=%s\n", id, WiFi.localIP().toString().c_str());
-//// jwc 25-1126-2200         printf("   Orientation: Yaw=%.1f° Pitch=%.1f° Roll=%.1f°\n", yaw, pitch, roll);
-//// jwc 25-1126-2200         printf("   Position: (%.1f, %.1f, %.1f) cm\n", x_cm, y_cm, z_cm);
-//// jwc 25-1126-2200         printf("   Distance: %.1f cm, Size: %.1f%%\n", distance_cm, tag_size_percent);
-//// jwc 25-1126-2200         printf("   Timestamp: %lu ms\n", timestamp);
-//// jwc 25-1126-2200         printf("   Queue: %d/%d events\n", queue_count, tagData_MAX);
-//// jwc 25-1126-2200         printf("\n");
-//// jwc 25-1126-2200     } else {
-//// jwc 25-1126-2200         printf("*** QUEUE: FULL! Event dropped (Tag ID:%d)\n", id);
-//// jwc 25-1126-2200     }
-//// jwc 25-1126-2200 }
+// Queue tag detection for later HTTP sending (non-blocking, fast)
+void queueTagEvent(int id, float yaw, float pitch, float roll, float x_cm, float y_cm, float z_cm, 
+                   float tag_size_percent, float distance_cm, const char* camera_name) {
+    if (queue_count < tagData_MAX) {
+        unsigned long timestamp = millis();
+        tagData_Queue[queue_head] = {id, yaw, pitch, roll, x_cm, y_cm, z_cm, tag_size_percent, distance_cm, timestamp};
+        queue_head = (queue_head + 1) % tagData_MAX;
+        queue_count++;
+        
+        #if DEBUG >= 1
+        printf("*** QUEUED: Tag ID=%d, Queue=%d/%d\n", id, queue_count, tagData_MAX);
+        #endif
+    } else {
+        printf("*** QUEUE FULL! Dropped Tag ID=%d\n", id);
+    }
+}
+
+// Pop oldest tag from queue for HTTP sending
+bool popTagEvent(tagData_Struct* out_tag) {
+    if (queue_count > 0) {
+        // Calculate read position (oldest event = FIFO)
+        int read_pos = (queue_head - queue_count + tagData_MAX) % tagData_MAX;
+        *out_tag = tagData_Queue[read_pos];
+        queue_count--;
+        return true;
+    }
+    return false;
+}
 //// jwc 25-1126-2200 
 //// jwc 25-1126-2200 // Build JSON response from queue with latency stats
 //// jwc 25-1126-2200 String getEventsJSON(unsigned long request_start_us) {
@@ -1190,13 +1196,16 @@ void loop()
                     matd_destroy(R_transpose);
                     matd_destroy(camera_position);
                     
-                    // Send HTTP POST with all AprilTag data
+                    // Queue tag data for later HTTP sending (non-blocking, fast)
                     sensor_t *s = esp_camera_sensor_get();
                     if (s) {
                         camera_sensor_info_t *sinfo = esp_camera_sensor_get_info(&(s->id));
                         if (sinfo) {
-                            sendAprilTagData(det->id, sinfo->name, yaw, pitch, roll, 
-                                           x_cm, y_cm, z_cm, tag_size_percent, distance_cm);
+                            //// jwc 25-1127-1140 y sendAprilTagData(det->id, sinfo->name, yaw, pitch, roll, 
+                            //// jwc 25-1127-1140 y                x_cm, y_cm, z_cm, tag_size_percent, distance_cm);
+
+                            queueTagEvent(det->id, yaw, pitch, roll, x_cm, y_cm, z_cm, 
+                                        tag_size_percent, distance_cm, sinfo->name);
                         }
                     }
 
@@ -1414,9 +1423,35 @@ void loop()
 
     }
     
-    //// jwc 25-1124-1800 OLD HTTP POST CODE REMOVED
-    //// All AprilTag events are now queued and served via HTTP GET at /events endpoint
-    //// GDevelop polls this endpoint to retrieve events (no need for ESP32 to initiate HTTP POST)
+    //// jwc 25-1127-1130 PERIODIC HTTP SENDER - Processes queue one tag at a time
+    // Check if it's time to send queued tag data via HTTP
+    unsigned long current_time = millis();
+    if (queue_count > 0 && 
+        (current_time - last_http_send_time >= HTTP_SEND_INTERVAL_MS)) {
+        
+        // Pop oldest tag from queue
+        tagData_Struct tag_to_send;
+        if (popTagEvent(&tag_to_send)) {
+            #if DEBUG >= 1
+            printf("\n*** HTTP: Sending queued tag (Queue: %d remaining)...\n", queue_count);
+            #endif
+            
+            // Send via HTTP POST
+            sensor_t *s = esp_camera_sensor_get();
+            if (s) {
+                camera_sensor_info_t *sinfo = esp_camera_sensor_get_info(&(s->id));
+                if (sinfo) {
+                    sendAprilTagData(tag_to_send.tag_id, sinfo->name, 
+                                   tag_to_send.yaw, tag_to_send.pitch, tag_to_send.roll,
+                                   tag_to_send.x_cm, tag_to_send.y_cm, tag_to_send.z_cm,
+                                   tag_to_send.tag_size_percent, tag_to_send.distance_cm);
+                }
+            }
+            
+            // Update last send time (whether success or failure)
+            last_http_send_time = current_time;
+        }
+    }
     ////
     //// jwc 25-1124-1700 y //// jwc 25-1123-0750 PERIODIC HTTP SENDER - Non-blocking, separate from screen updates
     //// jwc 25-1124-1700 y // Check if it's time to send buffered tag data via HTTP
