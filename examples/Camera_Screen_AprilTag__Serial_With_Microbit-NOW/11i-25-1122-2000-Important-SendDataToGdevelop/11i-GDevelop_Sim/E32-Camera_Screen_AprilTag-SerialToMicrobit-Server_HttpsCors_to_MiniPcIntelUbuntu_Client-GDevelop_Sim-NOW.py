@@ -73,7 +73,7 @@ Based on TestServer but specifically designed to receive ESP32 AprilTag data
 Receives det->id and sinfo->name from ESP32 T-CameraPlus-S3
 """
 
-from flask import Flask, request, jsonify, render_template_string
+from flask import Flask, request, jsonify, render_template_string, make_response
 from flask_cors import CORS
 import time
 import json
@@ -83,6 +83,28 @@ import threading
 # Configuration
 ESP32_SERVER_PORT = 5000
 ESP32_SERVER_HOST = '0.0.0.0'  # Listen on all interfaces
+
+# TagData class to match ESP32's tagData_Struct
+class TagData:
+    def __init__(self):
+        self.smartcam_ip = ""
+        self.tag_id = 0
+        self.camera_name = ""
+        self.yaw = 0.0
+        self.pitch = 0.0
+        self.roll = 0.0
+        self.x_cm = 0.0
+        self.y_cm = 0.0
+        self.z_cm = 0.0
+        self.tag_size_percent = 0.0
+        self.distance_cm = 0.0
+        self.timestamp = 0
+
+# Global queue for AprilTag data (mirrors ESP32 structure)
+tagData_List_Fifo = []
+tagData_List_Fifo_Count_Base1 = 0
+tagData_List_Fifo_Count_MAX_Base1 = 50
+tagData_List_Fifo_Index_Head_Base0 = 0
 
 # Global storage for received ESP32 data
 esp32_data_log = []
@@ -99,7 +121,8 @@ stats = {
     'successful_requests': 0,
     'failed_requests': 0,
     'unique_tag_ids': set(),
-    'start_time': time.time()
+    'start_time': time.time(),
+    'queue_overflows': 0
 }
 
 # Create Flask app
@@ -220,6 +243,35 @@ def log_esp32_data(message, level="INFO"):
     
     print(log_entry)
 
+def AprilTag_List_Fifo_Push(tag_data):
+    """Add tag data to circular queue (FIFO with oldest drop on overflow)"""
+    global tagData_List_Fifo_Index_Head_Base0, tagData_List_Fifo_Count_Base1, stats
+    
+    if tagData_List_Fifo_Count_Base1 < tagData_List_Fifo_Count_MAX_Base1:
+        # Queue not full, just append
+        tagData_List_Fifo.append(tag_data)
+        tagData_List_Fifo_Count_Base1 += 1
+    else:
+        # Queue full, drop oldest (FIFO)
+        tagData_List_Fifo[tagData_List_Fifo_Index_Head_Base0] = tag_data
+        tagData_List_Fifo_Index_Head_Base0 = (tagData_List_Fifo_Index_Head_Base0 + 1) % tagData_List_Fifo_Count_MAX_Base1
+        stats['queue_overflows'] += 1
+        log_esp32_data(f"⚠️  Queue overflow! Dropped oldest event. Total overflows: {stats['queue_overflows']}", "WARN")
+
+def AprilTag_List_Fifo_Pop():
+    """Remove and return oldest tag data from queue"""
+    global tagData_List_Fifo_Index_Head_Base0, tagData_List_Fifo_Count_Base1
+    
+    if tagData_List_Fifo_Count_Base1 == 0:
+        return None
+    
+    # Get oldest event
+    tag_data = tagData_List_Fifo[tagData_List_Fifo_Index_Head_Base0]
+    tagData_List_Fifo_Index_Head_Base0 = (tagData_List_Fifo_Index_Head_Base0 + 1) % tagData_List_Fifo_Count_MAX_Base1
+    tagData_List_Fifo_Count_Base1 -= 1
+    
+    return tag_data
+
 @app.route('/')
 def home():
     """Web interface showing ESP32 data reception status"""
@@ -242,9 +294,9 @@ def home():
                                 data_age=data_age,
                                 recent_log=esp32_data_log[-10:])
 
-@app.route('/esp32_apriltag_data', methods=['POST', 'OPTIONS'])
+@app.route('/client_to_server__smartcam_data_post', methods=['POST', 'OPTIONS'])
 def receive_esp32_apriltag_data():
-    """Main endpoint to receive ESP32 AprilTag data"""
+    """Main endpoint to receive ESP32 SmartCam AprilTag data"""
     global latest_esp32_data, stats
     
     # Handle CORS preflight
@@ -257,31 +309,71 @@ def receive_esp32_apriltag_data():
         # Get JSON data from ESP32
         data = request.get_json()
         
+        # DEBUG: Print raw received data
+        print("\n" + "="*70)
+        print("📥 POST RECEIVED - Raw Data:")
+        print("="*70)
+        if data:
+            import json
+            print(json.dumps(data, indent=2))
+        else:
+            print("  ⚠️  No data received (empty)")
+        print("="*70 + "\n")
+        
         if not data:
             stats['failed_requests'] += 1
             log_esp32_data("❌ No JSON data received", "ERROR")
             return jsonify({'error': 'No JSON data provided'}), 400
         
-        # Extract ESP32 AprilTag data
-        tag_id = data.get('id')
-        camera_name = data.get('camera_name')
-        timestamp = data.get('timestamp', time.time())
+        # Extract all AprilTag fields
+        smartcam_ip = data.get('smartcam_ip', '')
+        tag_id = data.get('tag_id')
+        camera_name = data.get('camera_name', '')
+        yaw = data.get('yaw', 0.0)
+        pitch = data.get('pitch', 0.0)
+        roll = data.get('roll', 0.0)
+        x_cm = data.get('x_cm', 0.0)
+        y_cm = data.get('y_cm', 0.0)
+        z_cm = data.get('z_cm', 0.0)
+        tag_size_percent = data.get('tag_size_percent', 0.0)
+        distance_cm = data.get('distance_cm', 0.0)
+        timestamp = data.get('timestamp', int(time.time()))
         
         # Validate required fields
         if tag_id is None:
             stats['failed_requests'] += 1
-            log_esp32_data("❌ Missing 'id' field in ESP32 data", "ERROR")
-            return jsonify({'error': 'Missing required field: id'}), 400
+            log_esp32_data("❌ Missing 'tag_id' field in ESP32 data", "ERROR")
+            return jsonify({'error': 'Missing required field: tag_id'}), 400
         
-        if not camera_name:
-            stats['failed_requests'] += 1
-            log_esp32_data("❌ Missing 'camera_name' field in ESP32 data", "ERROR")
-            return jsonify({'error': 'Missing required field: camera_name'}), 400
+        # Use server's current time as timestamp (ESP32's millis() is not compatible with Unix time)
+        server_receive_time = time.time()
         
-        # Update global data
+        # Create TagData object
+        tag_data = TagData()
+        tag_data.smartcam_ip = smartcam_ip
+        tag_data.tag_id = tag_id
+        tag_data.camera_name = camera_name
+        tag_data.yaw = yaw
+        tag_data.pitch = pitch
+        tag_data.roll = roll
+        tag_data.x_cm = x_cm
+        tag_data.y_cm = y_cm
+        tag_data.z_cm = z_cm
+        tag_data.tag_size_percent = tag_size_percent
+        tag_data.distance_cm = distance_cm
+        tag_data.timestamp = server_receive_time  # Use server time, not ESP32 millis()
+        
+        # Push to queue
+        AprilTag_List_Fifo_Push(tag_data)
+        
+        # Calculate ESP32->Server latency (if ESP32 timestamp was in millis, we can't accurately calculate)
+        # For now, just log that data was received
+        network_latency_ms = 0  # Can't calculate accurately without synced clocks
+        
+        # Update global data for web interface
         latest_esp32_data = {
             'id': tag_id,
-            'camera_name': camera_name,
+            'camera_name': smartcam_ip,
             'timestamp': timestamp,
             'status': 'receiving_data'
         }
@@ -290,8 +382,16 @@ def receive_esp32_apriltag_data():
         stats['successful_requests'] += 1
         stats['unique_tag_ids'].add(tag_id)
         
-        # Log successful reception
-        log_esp32_data(f"✅ ESP32 AprilTag Data: ID={tag_id}, Camera={camera_name}", "SUCCESS")
+        # Log successful reception with network latency and data content
+        log_esp32_data(
+            f"📥 RECEIVED: Tag ID={tag_id}, IP={smartcam_ip}, "
+            f"Yaw={yaw:.1f}°, Pitch={pitch:.1f}°, Roll={roll:.1f}°, "
+            f"Pos=({x_cm:.1f},{y_cm:.1f},{z_cm:.1f})cm, "
+            f"Dist={distance_cm:.1f}cm, Size={tag_size_percent:.1f}%, "
+            f"Latency={network_latency_ms:.1f}ms, "
+            f"Queue={tagData_List_Fifo_Count_Base1}/{tagData_List_Fifo_Count_MAX_Base1}",
+            "SUCCESS"
+        )
         
         # Return success response to ESP32
         response_data = {
@@ -352,9 +452,85 @@ def test_esp32_connection():
         'endpoints': {
             'send_apriltag_data': 'POST /esp32_apriltag_data',
             'check_status': 'GET /esp32_status',
-            'test_connection': 'GET /test_esp32_connection'
+            'test_connection': 'GET /test_esp32_connection',
+            'gdevelop_get_data': 'GET /apriltag_data_get'
         }
     })
+
+@app.route('/client_to_server__smartcam_data_get', methods=['GET', 'OPTIONS'])
+def serve_gdevelop_data():
+    """GET endpoint for GDevelop to retrieve SmartCam AprilTag data from queue"""
+    
+    # Handle CORS preflight
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    # Pop oldest event from queue
+    tag_data = AprilTag_List_Fifo_Pop()
+    
+    if tag_data is None:
+        # No data in queue - return empty flat structure
+        return jsonify({
+            'smartcam_ip': '',
+            'tag_id': -1,
+            'camera_name': '',
+            'yaw': 0.0,
+            'pitch': 0.0,
+            'roll': 0.0,
+            'x_cm': 0.0,
+            'y_cm': 0.0,
+            'z_cm': 0.0,
+            'tag_size_percent': 0.0,
+            'distance_cm': 0.0,
+            'timestamp': 0,
+            'queue_remaining': 0
+        })
+    
+    # Calculate retrieval latency (time from ESP32 send to GDevelop retrieval)
+    retrieval_time = time.time()
+    total_latency_ms = (retrieval_time - tag_data.timestamp) * 1000.0
+    
+    # Prepare response data (flat structure)
+    response_data = {
+        'smartcam_ip': tag_data.smartcam_ip,
+        'tag_id': tag_data.tag_id,
+        'camera_name': tag_data.camera_name,
+        'yaw': tag_data.yaw,
+        'pitch': tag_data.pitch,
+        'roll': tag_data.roll,
+        'x_cm': tag_data.x_cm,
+        'y_cm': tag_data.y_cm,
+        'z_cm': tag_data.z_cm,
+        'tag_size_percent': tag_data.tag_size_percent,
+        'distance_cm': tag_data.distance_cm,
+        'timestamp': tag_data.timestamp,
+        'queue_remaining': tagData_List_Fifo_Count_Base1
+    }
+    
+    # DEBUG: Print data being sent to GDevelop
+    print("\n" + "="*70)
+    print("📤 GET RESPONSE - Sending Data to GDevelop:")
+    print("="*70)
+    import json
+    print(json.dumps(response_data, indent=2))
+    print("="*70 + "\n")
+    
+    # Log data being sent to GDevelop
+    log_esp32_data(
+        f"📤 SENT: Tag ID={tag_data.tag_id}, IP={tag_data.smartcam_ip}, "
+        f"Total_Latency={total_latency_ms:.1f}ms, "
+        f"Queue={tagData_List_Fifo_Count_Base1}/{tagData_List_Fifo_Count_MAX_Base1}",
+        "SUCCESS"
+    )
+    
+    # Create response with explicit CORS headers
+    response = make_response(jsonify(response_data))
+    response.headers['Access-Control-Allow-Origin'] = '*'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    response.headers['Content-Type'] = 'application/json'
+    
+    return response
 
 def print_startup_info():
     """Print server startup information"""
@@ -536,19 +712,21 @@ def print_startup_info():
     
     print(f"📍 Server URLs:")
     print(f"   Web Interface: http://{display_ip}:{ESP32_SERVER_PORT}/")
-    print(f"   ESP32 Endpoint: http://{display_ip}:{ESP32_SERVER_PORT}/esp32_apriltag_data")
+    print(f"   ESP32 POST Endpoint: http://{display_ip}:{ESP32_SERVER_PORT}/client_to_server__smartcam_data_post")
+    print(f"   GDevelop GET Endpoint: http://{display_ip}:{ESP32_SERVER_PORT}/client_to_server__smartcam_data_get")
     print(f"   Status Check: http://{display_ip}:{ESP32_SERVER_PORT}/esp32_status")
     
     if hotspot_ip and hotspot_ip != local_ip:
         print(f"\n💡 ESP32 Configuration:")
-        print(f'   const char* TEST_SERVER_URL = "http://{hotspot_ip}:{ESP32_SERVER_PORT}/esp32_apriltag_data";')
+        print(f'   const char* TEST_SERVER_URL = "http://{hotspot_ip}:{ESP32_SERVER_PORT}/client_to_server__smartcam_data_post";')
     print("=" * 70)
     print("📋 Expected ESP32 JSON Format:")
-    print('   {"id": 5, "camera_name": "OV2640", "timestamp": 1234567890}')
+    print('   {"tag_id": 5, "camera_name": "OV2640", "timestamp": 1234567890}')
     print("=" * 70)
-    print("🚀 Ready to receive ESP32 AprilTag data!")
+    print("🚀 Ready to receive ESP32 SmartCam AprilTag data!")
     print("   - Make sure ESP32 is connected to WiFi")
-    print("   - ESP32 should POST to /esp32_apriltag_data endpoint")
+    print("   - ESP32 should POST to /client_to_server__smartcam_data_post endpoint")
+    print("   - GDevelop should GET from /client_to_server__smartcam_data_get endpoint")
     print("   - View real-time data at web interface")
     if "5GHz" in wifi_band:
         print("   ⚠️  WARNING: Ubuntu on 5GHz! ESP32 needs 2.4GHz network!")

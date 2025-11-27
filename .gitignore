@@ -1,3 +1,5 @@
 .pio
 .vscode
 ### jwc 25-1123-1920 Still wish to track: libraries/Apriltag_library_for_Arduino_ESP32
+### jwc 25-1127-1030 GDevelop:
+*.json.autosave

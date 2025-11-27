@@ -160,10 +160,12 @@
 #include "camera_index.h"
 //// jwc o NOT NEEDED?: #include "app_httpd.tpp"
 
-//// jwc 25-1124-1630 Add HTTP server with event queue for direct GDevelop polling
+//// jwc 25-1126-2200 OPTION 1: ESP32 POSTs to Python Server (ACTIVE)
 #include <WiFi.h>
-//// jwc 25-1124-1650 y \/ #include <HTTPClient.h>
-#include <ESPAsyncWebServer.h>
+#include <HTTPClient.h>
+
+//// jwc 25-1126-2200 OPTION 2: ESP32 GET Server for direct polling (ARCHIVED)
+//// jwc 25-1126-2200 #include <ESPAsyncWebServer.h>
 
 // WiFi credentials
 //
@@ -197,8 +199,8 @@ tagData_Struct tagData_Queue[tagData_MAX];
 int queue_head = 0;   // Write position
 int queue_count = 0;  // Number of events in queue
 
-// HTTP Server on port 80
-AsyncWebServer server(80);
+//// jwc 25-1126-2200 OPTION 2: GET Server (ARCHIVED)
+//// jwc 25-1126-2200 AsyncWebServer server(80);
 
 //// jwc 25-1123-1800 Network latency measurement (microseconds for precision)
 // Tracks round-trip time for HTTP requests
@@ -233,83 +235,94 @@ struct NetworkLatencyStats {
     }
 } network_latency;
 
-// Add event to circular buffer
-void queueTagEvent(int id, float yaw, float pitch, float roll, float x_cm, float y_cm, float z_cm, float tag_size_percent, float distance_cm) {
-    if (queue_count < tagData_MAX) {
-        tagData_Queue[queue_head] = {id, yaw, pitch, roll, x_cm, y_cm, z_cm, tag_size_percent, distance_cm, millis()};
-        queue_head = (queue_head + 1) % tagData_MAX;
-        queue_count++;
-        printf("*** QUEUE: Event added - Tag ID:%d (queue size:%d/%d)\n", id, queue_count, tagData_MAX);
-    } else {
-        printf("*** QUEUE: FULL! Event dropped (Tag ID:%d)\n", id);
-    }
-}
+//// jwc 25-1126-2200 OPTION 2: Queue functions (ARCHIVED)
+//// jwc 25-1126-2200 // Add event to circular buffer
+//// jwc 25-1126-2200 void queueTagEvent(int id, float yaw, float pitch, float roll, float x_cm, float y_cm, float z_cm, float tag_size_percent, float distance_cm) {
+//// jwc 25-1126-2200     if (queue_count < tagData_MAX) {
+//// jwc 25-1126-2200         unsigned long timestamp = millis();
+//// jwc 25-1126-2200         tagData_Queue[queue_head] = {id, yaw, pitch, roll, x_cm, y_cm, z_cm, tag_size_percent, distance_cm, timestamp};
+//// jwc 25-1126-2200         queue_head = (queue_head + 1) % tagData_MAX;
+//// jwc 25-1126-2200         queue_count++;
+//// jwc 25-1126-2200         
+//// jwc 25-1126-2200         // Debug print with full message content
+//// jwc 25-1126-2200         printf("\n");
+//// jwc 25-1126-2200         printf("📥 QUEUED: Tag ID=%d, IP=%s\n", id, WiFi.localIP().toString().c_str());
+//// jwc 25-1126-2200         printf("   Orientation: Yaw=%.1f° Pitch=%.1f° Roll=%.1f°\n", yaw, pitch, roll);
+//// jwc 25-1126-2200         printf("   Position: (%.1f, %.1f, %.1f) cm\n", x_cm, y_cm, z_cm);
+//// jwc 25-1126-2200         printf("   Distance: %.1f cm, Size: %.1f%%\n", distance_cm, tag_size_percent);
+//// jwc 25-1126-2200         printf("   Timestamp: %lu ms\n", timestamp);
+//// jwc 25-1126-2200         printf("   Queue: %d/%d events\n", queue_count, tagData_MAX);
+//// jwc 25-1126-2200         printf("\n");
+//// jwc 25-1126-2200     } else {
+//// jwc 25-1126-2200         printf("*** QUEUE: FULL! Event dropped (Tag ID:%d)\n", id);
+//// jwc 25-1126-2200     }
+//// jwc 25-1126-2200 }
+//// jwc 25-1126-2200 
+//// jwc 25-1126-2200 // Build JSON response from queue with latency stats
+//// jwc 25-1126-2200 String getEventsJSON(unsigned long request_start_us) {
+//// jwc 25-1126-2200     // Start JSON response
+//// jwc 25-1126-2200     String json = "{";
+//// jwc 25-1126-2200     
+//// jwc 25-1126-2200     bool has_tag = false;
+//// jwc 25-1126-2200     
+//// jwc 25-1126-2200     // Only send 1 event per HTTP GET request (if available)
+//// jwc 25-1126-2200     if (queue_count > 0) {
+//// jwc 25-1126-2200         // Calculate read position (oldest event)
+//// jwc 25-1126-2200         int read_pos = (queue_head - queue_count + tagData_MAX) % tagData_MAX;
+//// jwc 25-1126-2200         
+//// jwc 25-1126-2200         tagData_Struct& evt = tagData_Queue[read_pos];
+//// jwc 25-1126-2200         json += "\"smartcam_ip\":\"" + WiFi.localIP().toString() + "\",";
+//// jwc 25-1126-2200         json += "\"tag_id\":" + String(evt.tag_id) + ",";
+//// jwc 25-1126-2200         json += "\"yaw\":" + String(evt.yaw, 1) + ",";
+//// jwc 25-1126-2200         json += "\"pitch\":" + String(evt.pitch, 1) + ",";
+//// jwc 25-1126-2200         json += "\"roll\":" + String(evt.roll, 1) + ",";
+//// jwc 25-1126-2200         json += "\"x_cm\":" + String(evt.x_cm, 1) + ",";
+//// jwc 25-1126-2200         json += "\"y_cm\":" + String(evt.y_cm, 1) + ",";
+//// jwc 25-1126-2200         json += "\"z_cm\":" + String(evt.z_cm, 1) + ",";
+//// jwc 25-1126-2200         json += "\"tag_size_percent\":" + String(evt.tag_size_percent, 1) + ",";
+//// jwc 25-1126-2200         json += "\"distance_cm\":" + String(evt.distance_cm, 1) + ",";
+//// jwc 25-1126-2200         json += "\"timestamp\":" + String(evt.timestamp) + ",";
+//// jwc 25-1126-2200         
+//// jwc 25-1126-2200         // Remove the sent event from queue
+//// jwc 25-1126-2200         queue_count--;
+//// jwc 25-1126-2200         has_tag = true;
+//// jwc 25-1126-2200     }
+//// jwc 25-1126-2200     
+//// jwc 25-1126-2200     // Close JSON response with remaining queue count
+//// jwc 25-1126-2200     json += "\"queue_remaining\":" + String(queue_count) + "}";
+//// jwc 25-1126-2200     
+//// jwc 25-1126-2200     // Calculate processing latency in microseconds
+//// jwc 25-1126-2200     unsigned long processing_us = micros() - request_start_us;
+//// jwc 25-1126-2200     
+//// jwc 25-1126-2200     // Update latency statistics
+//// jwc 25-1126-2200     network_latency.update(processing_us);
+//// jwc 25-1126-2200     
+//// jwc 25-1126-2200     // Log latency to console only if events were sent (not in JSON response)
+//// jwc 25-1126-2200     if (has_tag) {
+//// jwc 25-1126-2200         //// jwc 25-1124-2020 printf("\n");
+//// jwc 25-1126-2200         // Convert to milliseconds for display (with decimal precision)
+//// jwc 25-1126-2200         float current_ms = network_latency.current_us / 1000.0;
+//// jwc 25-1126-2200         float min_ms = network_latency.min_us / 1000.0;
+//// jwc 25-1126-2200         float avg_ms = network_latency.getAverage() / 1000.0;
+//// jwc 25-1126-2200         float max_ms = network_latency.max_us / 1000.0;
+//// jwc 25-1126-2200         
+//// jwc 25-1126-2200         printf("\n>>> >>> >>> HTTP GET: Send Stats:: 1 event | Latency: %.2fms (min:%.2f avg:%.2f max:%.2f)\n", 
+//// jwc 25-1126-2200                current_ms, min_ms, avg_ms, max_ms);
+//// jwc 25-1126-2200         printf(">>> >>> >>> HTTP GET: Send Data:: %s\n", json.c_str());
+//// jwc 25-1126-2200         printf("\n");
+//// jwc 25-1126-2200     }
+//// jwc 25-1126-2200     
+//// jwc 25-1126-2200     return json;
+//// jwc 25-1126-2200 }
 
-// Build JSON response from queue with latency stats
-String getEventsJSON(unsigned long request_start_us) {
-    // Start JSON response
-    String json = "{";
-    
-    bool has_tag = false;
-    
-    // Only send 1 event per HTTP GET request (if available)
-    if (queue_count > 0) {
-        // Calculate read position (oldest event)
-        int read_pos = (queue_head - queue_count + tagData_MAX) % tagData_MAX;
-        
-        tagData_Struct& evt = tagData_Queue[read_pos];
-        json += "\"smartcam_ip\":\"" + WiFi.localIP().toString() + "\",";
-        json += "\"tag_id\":" + String(evt.tag_id) + ",";
-        json += "\"yaw\":" + String(evt.yaw, 1) + ",";
-        json += "\"pitch\":" + String(evt.pitch, 1) + ",";
-        json += "\"roll\":" + String(evt.roll, 1) + ",";
-        json += "\"x_cm\":" + String(evt.x_cm, 1) + ",";
-        json += "\"y_cm\":" + String(evt.y_cm, 1) + ",";
-        json += "\"z_cm\":" + String(evt.z_cm, 1) + ",";
-        json += "\"tag_size_percent\":" + String(evt.tag_size_percent, 1) + ",";
-        json += "\"distance_cm\":" + String(evt.distance_cm, 1) + ",";
-        json += "\"timestamp\":" + String(evt.timestamp) + ",";
-        
-        // Remove the sent event from queue
-        queue_count--;
-        has_tag = true;
-    }
-    
-    // Close JSON response with remaining queue count
-    json += "\"queue_remaining\":" + String(queue_count) + "}";
-    
-    // Calculate processing latency in microseconds
-    unsigned long processing_us = micros() - request_start_us;
-    
-    // Update latency statistics
-    network_latency.update(processing_us);
-    
-    // Log latency to console only if events were sent (not in JSON response)
-    if (has_tag) {
-        //// jwc 25-1124-2020 printf("\n");
-        // Convert to milliseconds for display (with decimal precision)
-        float current_ms = network_latency.current_us / 1000.0;
-        float min_ms = network_latency.min_us / 1000.0;
-        float avg_ms = network_latency.getAverage() / 1000.0;
-        float max_ms = network_latency.max_us / 1000.0;
-        
-        printf("\n>>> >>> >>> HTTP GET: Send Stats:: 1 event | Latency: %.2fms (min:%.2f avg:%.2f max:%.2f)\n", 
-               current_ms, min_ms, avg_ms, max_ms);
-        printf(">>> >>> >>> HTTP GET: Send Data:: %s\n", json.c_str());
-        printf("\n");
-    }
-    
-    return json;
-}
-
-//// jwc 25-1124-1640 OLD HTTP POST CODE - TO BE REMOVED IN NEXT STEPS
-// Server URL
+//// jwc 25-1126-2300 HTTP POST Endpoint Configuration
+// Server URL for real-time AprilTag data transmission
 //
 //// jwc 25-1120-0910 HTTP Server Configuration - matching TestServer
-//// jwc 25-1122-0930 y const char* TEST_SERVER_URL = "http://10.0.0.150:5000/esp32_apriltag_data";
-//// jwc 25-1123-0400 y const char* TEST_SERVER_URL = "http://172.19.216.7:5000/esp32_apriltag_data";
-//// jwc 25-1124-1410 y const char* TEST_SERVER_URL = "http://10.42.0.1:5000/esp32_apriltag_data";
-const char* TEST_SERVER_URL = "http://10.0.0.149:5000/esp32_apriltag_data";
+//// jwc 25-1122-0930 y const char* TEST_SERVER_URL = "http://10.0.0.150:5000/client_to_server__smartcam_data_post";
+//// jwc 25-1123-0400 y const char* TEST_SERVER_URL = "http://172.19.216.7:5000/client_to_server__smartcam_data_post";
+//// jwc 25-1124-1410 y const char* TEST_SERVER_URL = "http://10.42.0.1:5000/client_to_server__smartcam_data_post";
+const char* TEST_SERVER_URL = "http://10.0.0.149:5000/client_to_server__smartcam_data_post";
 
 // Rate limiting - don't send too frequently
 //
@@ -417,32 +430,33 @@ void initWiFi() {
     if (WiFi.status() == WL_CONNECTED) {
         wifi_connected = true;
         printf("\n*** WiFi Connected! SmartCam-IP: %s\n", WiFi.localIP().toString().c_str());
-        printf("*** HTTP Server: http://%s/smartcam_data (for GDevelop polling)\n", WiFi.localIP().toString().c_str());
+        printf("*** POST Server: %s\n", TEST_SERVER_URL);
         
-        // Setup HTTP GET endpoint for GDevelop to poll
-        server.on("/smartcam_data", HTTP_GET, [](AsyncWebServerRequest *request){
-            // Start latency measurement (using micros for precision)
-            unsigned long request_start_us = micros();
-            
-            // Enable CORS for GDevelop
-            AsyncWebServerResponse *response = request->beginResponse(200, "application/json", getEventsJSON(request_start_us));
-            response->addHeader("Access-Control-Allow-Origin", "*");
-            response->addHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-            response->addHeader("Access-Control-Allow-Headers", "Content-Type");
-            request->send(response);
-        });
-        
-        // Handle CORS preflight
-        server.on("/smartcam_data", HTTP_OPTIONS, [](AsyncWebServerRequest *request){
-            AsyncWebServerResponse *response = request->beginResponse(200);
-            response->addHeader("Access-Control-Allow-Origin", "*");
-            response->addHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
-            response->addHeader("Access-Control-Allow-Headers", "Content-Type");
-            request->send(response);
-        });
-        
-        server.begin();
-        printf("*** HTTP Server: Started successfully!\n");
+        //// jwc 25-1126-2200 OPTION 2: GET Server (ARCHIVED)
+        //// jwc 25-1126-2200 // Setup HTTP GET endpoint for GDevelop to poll
+        //// jwc 25-1126-2200 server.on("/smartcam_data", HTTP_GET, [](AsyncWebServerRequest *request){
+        //// jwc 25-1126-2200     // Start latency measurement (using micros for precision)
+        //// jwc 25-1126-2200     unsigned long request_start_us = micros();
+        //// jwc 25-1126-2200     
+        //// jwc 25-1126-2200     // Enable CORS for GDevelop
+        //// jwc 25-1126-2200     AsyncWebServerResponse *response = request->beginResponse(200, "application/json", getEventsJSON(request_start_us));
+        //// jwc 25-1126-2200     response->addHeader("Access-Control-Allow-Origin", "*");
+        //// jwc 25-1126-2200     response->addHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        //// jwc 25-1126-2200     response->addHeader("Access-Control-Allow-Headers", "Content-Type");
+        //// jwc 25-1126-2200     request->send(response);
+        //// jwc 25-1126-2200 });
+        //// jwc 25-1126-2200 
+        //// jwc 25-1126-2200 // Handle CORS preflight
+        //// jwc 25-1126-2200 server.on("/smartcam_data", HTTP_OPTIONS, [](AsyncWebServerRequest *request){
+        //// jwc 25-1126-2200     AsyncWebServerResponse *response = request->beginResponse(200);
+        //// jwc 25-1126-2200     response->addHeader("Access-Control-Allow-Origin", "*");
+        //// jwc 25-1126-2200     response->addHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
+        //// jwc 25-1126-2200     response->addHeader("Access-Control-Allow-Headers", "Content-Type");
+        //// jwc 25-1126-2200     request->send(response);
+        //// jwc 25-1126-2200 });
+        //// jwc 25-1126-2200 
+        //// jwc 25-1126-2200 server.begin();
+        //// jwc 25-1126-2200 printf("*** HTTP Server: Started successfully!\n");
         
         gfx->setTextSize(2);
         gfx->setCursor(1, 220);
@@ -456,89 +470,97 @@ void initWiFi() {
     }
 }
 
-//// jwc 25-1124-1700 OLD HTTP POST CODE - REMOVED (was using HTTPClient)
-//// This has been replaced with HTTP GET server above for direct GDevelop polling
-//// jwc 25-1124-1700 y bool sendAprilTagData(int tag_id, const char* camera_name) {
-//// jwc 25-1124-1700 y     // Check WiFi connection status
-//// jwc 25-1124-1700 y     if (!wifi_connected || WiFi.status() != WL_CONNECTED) {
-//// jwc 25-1124-1700 y         printf("*** HTTP ERROR: WiFi not connected (wifi_connected=%d, WiFi.status()=%d)\n", 
-//// jwc 25-1124-1700 y                wifi_connected, WiFi.status());
-//// jwc 25-1124-1700 y         return false;
-//// jwc 25-1124-1700 y     }
-//// jwc 25-1124-1700 y     
-//// jwc 25-1124-1700 y     unsigned long current_time = millis();
-//// jwc 25-1124-1700 y     
-//// jwc 25-1124-1700 y     //// jwc 25-1123-1800 Start latency measurement
-//// jwc 25-1124-1700 y     unsigned long latency_start_ms = millis();
-//// jwc 25-1124-1700 y     
-//// jwc 25-1124-1700 y     printf("\nvvv HTTP REQUEST START vvv\n");
-//// jwc 25-1124-1700 y     printf("*** HTTP: Target URL: %s\n", TEST_SERVER_URL);
-//// jwc 25-1124-1700 y     printf("*** HTTP: Tag ID: %d, Camera: %s\n", tag_id, camera_name);
-//// jwc 25-1124-1700 y     
-//// jwc 25-1124-1700 y     HTTPClient http;
-//// jwc 25-1124-1700 y     http.begin(TEST_SERVER_URL);
-//// jwc 25-1124-1700 y     http.addHeader("Content-Type", "application/json");
-//// jwc 25-1124-1700 y     http.addHeader("Access-Control-Allow-Origin", "*");
-//// jwc 25-1124-1700 y     http.addHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
-//// jwc 25-1124-1700 y     http.addHeader("Access-Control-Allow-Headers", "Content-Type");
-//// jwc 25-1124-1700 y     
-//// jwc 25-1124-1700 y     // Create JSON payload - simple format without ArduinoJson library
-//// jwc 25-1124-1700 y     String json_payload = "{";
-//// jwc 25-1124-1700 y     json_payload += "\"id\":" + String(tag_id) + ",";
-//// jwc 25-1124-1700 y     json_payload += "\"camera_name\":\"" + String(camera_name) + "\",";
-//// jwc 25-1124-1700 y     json_payload += "\"timestamp\":" + String(current_time);
-//// jwc 25-1124-1700 y     json_payload += "}";
-//// jwc 25-1124-1700 y     
-//// jwc 25-1124-1700 y     printf("*** HTTP: Sending JSON payload: %s\n", json_payload.c_str());
-//// jwc 25-1124-1700 y     printf("*** HTTP: Payload size: %d bytes\n", json_payload.length());
-//// jwc 25-1124-1700 y     
-//// jwc 25-1124-1700 y     int httpResponseCode = http.POST(json_payload);
-//// jwc 25-1124-1700 y     
-//// jwc 25-1124-1700 y     //// jwc 25-1123-1800 End latency measurement
-//// jwc 25-1124-1700 y     unsigned long latency_end_ms = millis();
-//// jwc 25-1124-1700 y     unsigned long latency_ms = latency_end_ms - latency_start_ms;
-//// jwc 25-1124-1700 y     
-//// jwc 25-1124-1700 y     if (httpResponseCode > 0) {
-//// jwc 25-1124-1700 y         String response = http.getString();
-//// jwc 25-1124-1700 y         
-//// jwc 25-1124-1700 y         //// jwc 25-1123-1800 Update latency statistics on successful request
-//// jwc 25-1124-1700 y         network_latency.update(latency_ms);
-//// jwc 25-1124-1700 y         
-//// jwc 25-1124-1700 y         printf("*** HTTP SUCCESS: Response Code: %d\n", httpResponseCode);
-//// jwc 25-1124-1700 y         printf("*** HTTP SUCCESS: Server Response: %s\n", response.c_str());
-//// jwc 25-1124-1700 y         printf("*** HTTP LATENCY: Current=%lums, Min=%lums, Max=%lums, Avg=%lums (Count=%lu)\n",
-//// jwc 25-1124-1700 y                network_latency.current_ms,
-//// jwc 25-1124-1700 y                network_latency.min_ms,
-//// jwc 25-1124-1700 y                network_latency.max_ms,
-//// jwc 25-1124-1700 y                network_latency.getAverage(),
-//// jwc 25-1124-1700 y                network_latency.count);
-//// jwc 25-1124-1700 y         printf("^^^ HTTP REQUEST END (SUCCESS) ^^^\n\n");
-//// jwc 25-1124-1700 y         
-//// jwc 25-1124-1700 y         // Show success on display with latency
-//// jwc 25-1124-1700 y         gfx->setTextSize(1);
-//// jwc 25-1124-1700 y         gfx->setCursor(180, 1);
-//// jwc 25-1124-1700 y         gfx->printf("HTTP:%lums", latency_ms);
-//// jwc 25-1124-1700 y         
-//// jwc 25-1124-1700 y         http.end();
-//// jwc 25-1124-1700 y         return true;
-//// jwc 25-1124-1700 y     } else {
-//// jwc 25-1124-1700 y         printf("*** HTTP FAILURE: Error Code: %d\n", httpResponseCode);
-//// jwc 25-1124-1700 y         printf("*** HTTP FAILURE: Possible causes:\n");
-//// jwc 25-1124-1700 y         printf("    - Server not running on %s\n", TEST_SERVER_URL);
-//// jwc 25-1124-1700 y         printf("    - Network connectivity issues\n");
-//// jwc 25-1124-1700 y         printf("    - Firewall blocking port 5000\n");
-//// jwc 25-1124-1700 y         printf("^^^ HTTP REQUEST END (FAILED) ^^^\n\n");
-//// jwc 25-1124-1700 y         
-//// jwc 25-1124-1700 y         // Show error on display
-//// jwc 25-1124-1700 y         gfx->setTextSize(1);
-//// jwc 25-1124-1700 y         gfx->setCursor(200, 1);
-//// jwc 25-1124-1700 y         gfx->printf("HTTP:ERR");
-//// jwc 25-1124-1700 y         
-//// jwc 25-1124-1700 y         http.end();
-//// jwc 25-1124-1700 y         return false;
-//// jwc 25-1124-1700 y     }
-//// jwc 25-1124-1700 y }
-
+//// jwc 25-1126-2200 OPTION 1: Real-time HTTP POST (ACTIVE)
+bool sendAprilTagData(int tag_id, const char* camera_name, float yaw, float pitch, float roll, 
+                      float x_cm, float y_cm, float z_cm, float tag_size_percent, float distance_cm) {
+    // Check WiFi connection status
+    if (!wifi_connected || WiFi.status() != WL_CONNECTED) {
+        printf("*** HTTP ERROR: WiFi not connected (wifi_connected=%d, WiFi.status()=%d)\n", 
+               wifi_connected, WiFi.status());
+        return false;
+    }
+    
+    unsigned long current_time = millis();
+    
+    // Start latency measurement
+    unsigned long latency_start_ms = millis();
+    
+    printf("\nvvv HTTP POST START vvv\n");
+    printf("*** HTTP: Target URL: %s\n", TEST_SERVER_URL);
+    printf("*** HTTP: Tag ID: %d, Camera: %s\n", tag_id, camera_name);
+    
+    HTTPClient http;
+    http.begin(TEST_SERVER_URL);
+    http.addHeader("Content-Type", "application/json");
+    http.addHeader("Access-Control-Allow-Origin", "*");
+    http.addHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
+    http.addHeader("Access-Control-Allow-Headers", "Content-Type");
+    
+    // Create JSON payload with all AprilTag data
+    String json_payload = "{";
+    json_payload += "\"smartcam_ip\":\"" + WiFi.localIP().toString() + "\",";
+    json_payload += "\"tag_id\":" + String(tag_id) + ",";
+    json_payload += "\"yaw\":" + String(yaw, 1) + ",";
+    json_payload += "\"pitch\":" + String(pitch, 1) + ",";
+    json_payload += "\"roll\":" + String(roll, 1) + ",";
+    json_payload += "\"x_cm\":" + String(x_cm, 1) + ",";
+    json_payload += "\"y_cm\":" + String(y_cm, 1) + ",";
+    json_payload += "\"z_cm\":" + String(z_cm, 1) + ",";
+    json_payload += "\"tag_size_percent\":" + String(tag_size_percent, 1) + ",";
+    json_payload += "\"distance_cm\":" + String(distance_cm, 1) + ",";
+    json_payload += "\"camera_name\":\"" + String(camera_name) + "\",";
+    json_payload += "\"timestamp\":" + String(current_time);
+    json_payload += "}";
+    
+    printf("*** HTTP: Sending JSON payload: %s\n", json_payload.c_str());
+    printf("*** HTTP: Payload size: %d bytes\n", json_payload.length());
+    
+    int httpResponseCode = http.POST(json_payload);
+    
+    // End latency measurement
+    unsigned long latency_end_ms = millis();
+    unsigned long latency_ms = latency_end_ms - latency_start_ms;
+    
+    if (httpResponseCode > 0) {
+        String response = http.getString();
+        
+        // Update latency statistics on successful request
+        network_latency.update(latency_ms);
+        
+        printf("*** HTTP SUCCESS: Response Code: %d\n", httpResponseCode);
+        printf("*** HTTP SUCCESS: Server Response: %s\n", response.c_str());
+        printf("*** HTTP LATENCY: Current=%lums, Min=%lums, Max=%lums, Avg=%lums (Count=%lu)\n",
+               latency_ms,
+               network_latency.min_us / 1000,
+               network_latency.max_us / 1000,
+               network_latency.getAverage() / 1000,
+               network_latency.count);
+        printf("^^^ HTTP POST END (SUCCESS) ^^^\n\n");
+        
+        // Show success on display with latency
+        gfx->setTextSize(1);
+        gfx->setCursor(180, 1);
+        gfx->printf("HTTP:%lums", latency_ms);
+        
+        http.end();
+        return true;
+    } else {
+        printf("*** HTTP FAILURE: Error Code: %d\n", httpResponseCode);
+        printf("*** HTTP FAILURE: Possible causes:\n");
+        printf("    - Server not running on %s\n", TEST_SERVER_URL);
+        printf("    - Network connectivity issues\n");
+        printf("    - Firewall blocking port 5000\n");
+        printf("^^^ HTTP POST END (FAILED) ^^^\n\n");
+        
+        // Show error on display
+        gfx->setTextSize(1);
+        gfx->setCursor(200, 1);
+        gfx->printf("HTTP:ERR");
+        
+        http.end();
+        return false;
+    }
+}
 
 //// \/ jwc 25-0411-1800 convert to April-Tag Detect 
 
@@ -567,6 +589,7 @@ Guru Meditation Error: Core 1 panic'ed (LoadProhibited). Exception was unhandled
 //
 #include "apriltag_pose.h" // For pose estimation
 #include "common/matd.h"
+
 
 // Config for pose estimation
 // Tag size (in meter). See original AprilTag readme for how to measure
@@ -1145,27 +1168,10 @@ void loop()
                     //// jwc o Serial.printf("*** x,y,z: %5.0f, %5.0f, %5.0f\n", MATD_EL(camera_position, 0, 0), MATD_EL(camera_position, 1, 0), MATD_EL(camera_position, 2, 0));
                     printf(" *** x,y,z: %5.0f, %5.0f, %5.0f", MATD_EL(camera_position, 0, 0), MATD_EL(camera_position, 1, 0), MATD_EL(camera_position, 2, 0));
             #endif         
-                    // Free the matrices
-                    matd_destroy(R_transpose);
-                    matd_destroy(camera_position);
-
-                    //// jwc 25-1124-1700 y //// jwc 25-1123-0750 Buffer tag data instead of sending HTTP immediately
-                    //// jwc 25-1124-1700 y // This allows screen to update at full speed without blocking
-                    //// jwc 25-1124-1700 y sensor_t *s = esp_camera_sensor_get();
-                    //// jwc 25-1124-1700 y if (s) {
-                    //// jwc 25-1124-1700 y     camera_sensor_info_t *sinfo = esp_camera_sensor_get_info(&(s->id));
-                    //// jwc 25-1124-1700 y     if (sinfo) {
-                    //// jwc 25-1124-1700 y         // Save to buffer (instant, no network delay)
-                    //// jwc 25-1124-1700 y         latest_tag.has_data = true;
-                    //// jwc 25-1124-1700 y         latest_tag.tag_id = det->id;
-                    //// jwc 25-1124-1700 y         strncpy(latest_tag.camera_name, sinfo->name, sizeof(latest_tag.camera_name) - 1);
-                    //// jwc 25-1124-1700 y         latest_tag.camera_name[sizeof(latest_tag.camera_name) - 1] = '\0';
-                    //// jwc 25-1124-1700 y         latest_tag.timestamp = millis();
-                    //// jwc 25-1124-1700 y         printf("*** Tag buffered: ID=%d, Camera=%s (will send later)\n", det->id, sinfo->name);
-                    //// jwc 25-1124-1700 y     }
-                    //// jwc 25-1124-1700 y }
-
-                    //// jwc 25-1124-1730 NEW: Queue event for GDevelop polling
+                    
+                    //// jwc 25-1126-2200 OPTION 1: Real-time HTTP POST (ACTIVE)
+                    // Calculate all values BEFORE freeing matrices
+                    
                     // Convert meters to centimeters for x,y,z
                     float x_cm = MATD_EL(camera_position, 0, 0) * 100.0;
                     float y_cm = MATD_EL(camera_position, 1, 0) * 100.0;
@@ -1180,12 +1186,58 @@ void loop()
                     float screen_diagonal_px = sqrt(pow(frame->width, 2) + pow(frame->height, 2));
                     float tag_size_percent = (tag_width_px / screen_diagonal_px) * 100.0;
                     
-                    // Queue the event (instant, no network delay)
-                    queueTagEvent(det->id, yaw, pitch, roll, x_cm, y_cm, z_cm, tag_size_percent, distance_cm);
+                    // Free the matrices (after extracting values)
+                    matd_destroy(R_transpose);
+                    matd_destroy(camera_position);
                     
-            #if DEBUG >= 2    
-                    printf("*** Tag queued: size=%.1f%% of screen, distance=%.1fcm\n", tag_size_percent, distance_cm);
-            #endif
+                    // Send HTTP POST with all AprilTag data
+                    sensor_t *s = esp_camera_sensor_get();
+                    if (s) {
+                        camera_sensor_info_t *sinfo = esp_camera_sensor_get_info(&(s->id));
+                        if (sinfo) {
+                            sendAprilTagData(det->id, sinfo->name, yaw, pitch, roll, 
+                                           x_cm, y_cm, z_cm, tag_size_percent, distance_cm);
+                        }
+                    }
+
+                    //// jwc 25-1126-2200 OPTION 1B: Buffer for periodic POST (ARCHIVED)
+                    //// jwc 25-1126-2200 // Buffer tag data instead of sending HTTP immediately
+                    //// jwc 25-1126-2200 // This allows screen to update at full speed without blocking
+                    //// jwc 25-1126-2200 sensor_t *s = esp_camera_sensor_get();
+                    //// jwc 25-1126-2200 if (s) {
+                    //// jwc 25-1126-2200     camera_sensor_info_t *sinfo = esp_camera_sensor_get_info(&(s->id));
+                    //// jwc 25-1126-2200     if (sinfo) {
+                    //// jwc 25-1126-2200         // Save to buffer (instant, no network delay)
+                    //// jwc 25-1126-2200         latest_tag.has_data = true;
+                    //// jwc 25-1126-2200         latest_tag.tag_id = det->id;
+                    //// jwc 25-1126-2200         strncpy(latest_tag.camera_name, sinfo->name, sizeof(latest_tag.camera_name) - 1);
+                    //// jwc 25-1126-2200         latest_tag.camera_name[sizeof(latest_tag.camera_name) - 1] = '\0';
+                    //// jwc 25-1126-2200         latest_tag.timestamp = millis();
+                    //// jwc 25-1126-2200         printf("*** Tag buffered: ID=%d, Camera=%s (will POST later)\n", det->id, sinfo->name);
+                    //// jwc 25-1126-2200     }
+                    //// jwc 25-1126-2200 }
+
+                    //// jwc 25-1126-2200 OPTION 2: Queue for GET polling (ARCHIVED)
+                    //// jwc 25-1126-2200 // Convert meters to centimeters for x,y,z
+                    //// jwc 25-1126-2200 float x_cm = MATD_EL(camera_position, 0, 0) * 100.0;
+                    //// jwc 25-1126-2200 float y_cm = MATD_EL(camera_position, 1, 0) * 100.0;
+                    //// jwc 25-1126-2200 float z_cm = MATD_EL(camera_position, 2, 0) * 100.0;
+                    //// jwc 25-1126-2200 
+                    //// jwc 25-1126-2200 // Calculate distance from camera to tag (absolute value of z-coordinate)
+                    //// jwc 25-1126-2200 float distance_cm = fabs(MATD_EL(camera_position, 2, 0)) * 100.0;
+                    //// jwc 25-1126-2200 
+                    //// jwc 25-1126-2200 // Calculate tag size percentage of display
+                    //// jwc 25-1126-2200 // Tag corners span from p[0] to p[2] (diagonal)
+                    //// jwc 25-1126-2200 float tag_width_px = sqrt(pow(det->p[2][0] - det->p[0][0], 2) + pow(det->p[2][1] - det->p[0][1], 2));
+                    //// jwc 25-1126-2200 float screen_diagonal_px = sqrt(pow(frame->width, 2) + pow(frame->height, 2));
+                    //// jwc 25-1126-2200 float tag_size_percent = (tag_width_px / screen_diagonal_px) * 100.0;
+                    //// jwc 25-1126-2200 
+                    //// jwc 25-1126-2200 // Queue the event (instant, no network delay)
+                    //// jwc 25-1126-2200 queueTagEvent(det->id, yaw, pitch, roll, x_cm, y_cm, z_cm, tag_size_percent, distance_cm);
+                    //// jwc 25-1126-2200 
+            //// jwc 25-1126-2200 #if DEBUG >= 2    
+                    //// jwc 25-1126-2200 printf("*** Tag queued: size=%.1f%% of screen, distance=%.1fcm\n", tag_size_percent, distance_cm);
+            //// jwc 25-1126-2200 #endif
                     }
             #if DEBUG >= 2    
                     //// jwc o Serial.println("");
