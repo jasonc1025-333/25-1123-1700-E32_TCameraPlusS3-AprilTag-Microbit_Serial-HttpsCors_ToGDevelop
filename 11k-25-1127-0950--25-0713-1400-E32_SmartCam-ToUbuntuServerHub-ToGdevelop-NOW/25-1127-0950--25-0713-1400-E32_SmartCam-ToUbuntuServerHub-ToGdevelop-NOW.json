@@ -454,7 +454,7 @@
         "gridColor": 10401023,
         "gridAlpha": 0.8,
         "snap": false,
-        "zoomFactor": 0.4335774304702388,
+        "zoomFactor": 0.6040838749988896,
         "windowMask": false,
         "selectedLayer": ""
       },
@@ -1280,7 +1280,7 @@
           "name": "_23_0130_1720_RQ100_SpikePrime_OwenGervais_Assembly__25_1125_0640_Onshape_CoarseVsFine_Gltf__GltfDotReport_v1_Export_AAA_Less15mb_glb__3DModel__Z_65pix",
           "persistentUuid": "d45792a2-a12b-4276-b337-9bedf2274121",
           "width": 0,
-          "x": 419,
+          "x": 610,
           "y": 385,
           "z": 65,
           "zOrder": 17,
@@ -2825,31 +2825,6 @@
             "width": 200,
             "animations": []
           }
-        },
-        {
-          "assetStoreId": "",
-          "name": "New3DModel",
-          "type": "Scene3D::Model3DObject",
-          "variables": [],
-          "effects": [],
-          "behaviors": [],
-          "content": {
-            "centerLocation": "ModelOrigin",
-            "crossfadeDuration": 0.10000000149011612,
-            "depth": 100,
-            "height": 100,
-            "isCastingShadow": true,
-            "isReceivingShadow": true,
-            "keepAspectRatio": true,
-            "materialType": "StandardWithoutMetalness",
-            "modelResourceName": "",
-            "originLocation": "ModelOrigin",
-            "rotationX": 0,
-            "rotationY": 0,
-            "rotationZ": 0,
-            "width": 100,
-            "animations": []
-          }
         }
       ],
       "objectsFolderStructure": {
@@ -2932,9 +2907,6 @@
           },
           {
             "objectName": "_23_0130_1720_RQ100_SpikePrime_OwenGervais_Assembly__25_1125_0640_Onshape_CoarseVsFine_Gltf__GltfDotReport_v1_Export_AAA_Less15mb_glb__3DModel__Z_65pix"
-          },
-          {
-            "objectName": "New3DModel"
           }
         ]
       },
@@ -4221,7 +4193,7 @@
             "textG": 0,
             "textR": 0
           },
-          "comment": "* 10 fps polling = 0.1 sec\n* 'Network: Send a request to a web page': Parameter 'Body': Normally Emtpy-Text for 'Get'"
+          "comment": "* 10 fps polling = 0.1 sec = 100ms | 20fps = 0.05sec = 50ms | 50fps = 0.02sec = 20ms | .05sec seems good balance to not overload network w/ min-fps\n* 'Network: Send a request to a web page': Parameter 'Body': Normally Emtpy-Text for 'Get'"
         },
         {
           "type": "BuiltinCommonInstructions::Standard",
@@ -4234,7 +4206,7 @@
                 "",
                 "\"Timer_SendTo_ServerRelayHub\"",
                 ">=",
-                "0.1"
+                "0.05"
               ]
             }
           ],
@@ -4253,7 +4225,7 @@
                 "value": "SendAsyncRequest"
               },
               "parameters": [
-                "\"http://10.0.0.149:5000/client_to_server__smartcam_data_get\"",
+                "\"http://10.0.0.149:5000/client_gdevelop_to_server__smartcam_data_get\"",
                 "\"\"",
                 "\"GET\"",
                 "",
@@ -4408,6 +4380,278 @@
               "comment": "* Fwd: Force x2"
             },
             {
+              "type": "BuiltinCommonInstructions::Comment",
+              "color": {
+                "b": 109,
+                "g": 230,
+                "r": 255,
+                "textB": 0,
+                "textG": 0,
+                "textR": 0
+              },
+              "comment": "* Tag_Id: Using Mod=10, then Clock-Wise:: 1=Front, 2=Right, 3=Back, 4=Left"
+            },
+            {
+              "type": "BuiltinCommonInstructions::Comment",
+              "color": {
+                "b": 109,
+                "g": 230,
+                "r": 255,
+                "textB": 0,
+                "textG": 0,
+                "textR": 0
+              },
+              "comment": "* Default to No-Tint"
+            },
+            {
+              "type": "BuiltinCommonInstructions::Standard",
+              "conditions": [],
+              "actions": [
+                {
+                  "type": {
+                    "value": "ChangeColor"
+                  },
+                  "parameters": [
+                    "BlueSpaceship",
+                    "\"255;255;255\""
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "BuiltinCommonInstructions::Standard",
+              "conditions": [
+                {
+                  "type": {
+                    "value": "BuiltinCommonInstructions::CompareNumbers"
+                  },
+                  "parameters": [
+                    "mod(ServerRelayHub_BotData_Rx_Structure.tag_id,10)",
+                    "=",
+                    "1"
+                  ]
+                }
+              ],
+              "actions": [
+                {
+                  "type": {
+                    "value": "ChangeColor"
+                  },
+                  "parameters": [
+                    "BlueSpaceship",
+                    "\"248;231;28\""
+                  ]
+                },
+                {
+                  "type": {
+                    "value": "Create"
+                  },
+                  "parameters": [
+                    "",
+                    "Spaceship_EngineBurst_ParticlesEmitter",
+                    "BlueSpaceship.PointX(\"Front_Middle\")",
+                    "BlueSpaceship.PointY(\"Front_Middle\")",
+                    ""
+                  ]
+                },
+                {
+                  "type": {
+                    "value": "ParticleSystem::ParticleEmitter::SetMaxParticlesCount"
+                  },
+                  "parameters": [
+                    "Spaceship_EngineBurst_ParticlesEmitter",
+                    "=",
+                    "25"
+                  ]
+                },
+                {
+                  "type": {
+                    "value": "ParticleSystem::EmitterAngle"
+                  },
+                  "parameters": [
+                    "Spaceship_EngineBurst_ParticlesEmitter",
+                    "=",
+                    "BlueSpaceship.Angle()"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "BuiltinCommonInstructions::Standard",
+              "conditions": [
+                {
+                  "type": {
+                    "value": "BuiltinCommonInstructions::CompareNumbers"
+                  },
+                  "parameters": [
+                    "mod(ServerRelayHub_BotData_Rx_Structure.tag_id,10)",
+                    "=",
+                    "2"
+                  ]
+                }
+              ],
+              "actions": [
+                {
+                  "type": {
+                    "value": "ChangeColor"
+                  },
+                  "parameters": [
+                    "BlueSpaceship",
+                    "\"126;211;33\""
+                  ]
+                },
+                {
+                  "type": {
+                    "value": "Create"
+                  },
+                  "parameters": [
+                    "",
+                    "Spaceship_EngineBurst_ParticlesEmitter",
+                    "BlueSpaceship.PointX(\"Right_Middle\")",
+                    "BlueSpaceship.PointY(\"Right_Middle\")",
+                    ""
+                  ]
+                },
+                {
+                  "type": {
+                    "value": "ParticleSystem::ParticleEmitter::SetMaxParticlesCount"
+                  },
+                  "parameters": [
+                    "Spaceship_EngineBurst_ParticlesEmitter",
+                    "=",
+                    "25"
+                  ]
+                },
+                {
+                  "type": {
+                    "value": "ParticleSystem::EmitterAngle"
+                  },
+                  "parameters": [
+                    "Spaceship_EngineBurst_ParticlesEmitter",
+                    "=",
+                    "BlueSpaceship.Angle() + 90"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "BuiltinCommonInstructions::Standard",
+              "conditions": [
+                {
+                  "type": {
+                    "value": "BuiltinCommonInstructions::CompareNumbers"
+                  },
+                  "parameters": [
+                    "mod(ServerRelayHub_BotData_Rx_Structure.tag_id,10)",
+                    "=",
+                    "3"
+                  ]
+                }
+              ],
+              "actions": [
+                {
+                  "type": {
+                    "value": "ChangeColor"
+                  },
+                  "parameters": [
+                    "BlueSpaceship",
+                    "\"245;166;35\""
+                  ]
+                },
+                {
+                  "type": {
+                    "value": "Create"
+                  },
+                  "parameters": [
+                    "",
+                    "Spaceship_EngineBurst_ParticlesEmitter",
+                    "BlueSpaceship.PointX(\"Rear_Middle\")",
+                    "BlueSpaceship.PointY(\"Rear_Middle\")",
+                    ""
+                  ]
+                },
+                {
+                  "type": {
+                    "value": "ParticleSystem::ParticleEmitter::SetMaxParticlesCount"
+                  },
+                  "parameters": [
+                    "Spaceship_EngineBurst_ParticlesEmitter",
+                    "=",
+                    "25"
+                  ]
+                },
+                {
+                  "type": {
+                    "value": "ParticleSystem::EmitterAngle"
+                  },
+                  "parameters": [
+                    "Spaceship_EngineBurst_ParticlesEmitter",
+                    "=",
+                    "BlueSpaceship.Angle() + 180"
+                  ]
+                }
+              ]
+            },
+            {
+              "type": "BuiltinCommonInstructions::Standard",
+              "conditions": [
+                {
+                  "type": {
+                    "value": "BuiltinCommonInstructions::CompareNumbers"
+                  },
+                  "parameters": [
+                    "mod(ServerRelayHub_BotData_Rx_Structure.tag_id,10)",
+                    "=",
+                    "4"
+                  ]
+                }
+              ],
+              "actions": [
+                {
+                  "type": {
+                    "value": "ChangeColor"
+                  },
+                  "parameters": [
+                    "BlueSpaceship",
+                    "\"74;144;226\""
+                  ]
+                },
+                {
+                  "type": {
+                    "value": "Create"
+                  },
+                  "parameters": [
+                    "",
+                    "Spaceship_EngineBurst_ParticlesEmitter",
+                    "BlueSpaceship.PointX(\"Left_Middle\")",
+                    "BlueSpaceship.PointY(\"Left_Middle\")",
+                    ""
+                  ]
+                },
+                {
+                  "type": {
+                    "value": "ParticleSystem::ParticleEmitter::SetMaxParticlesCount"
+                  },
+                  "parameters": [
+                    "Spaceship_EngineBurst_ParticlesEmitter",
+                    "=",
+                    "25"
+                  ]
+                },
+                {
+                  "type": {
+                    "value": "ParticleSystem::EmitterAngle"
+                  },
+                  "parameters": [
+                    "Spaceship_EngineBurst_ParticlesEmitter",
+                    "=",
+                    "BlueSpaceship.Angle() + 270"
+                  ]
+                }
+              ]
+            },
+            {
+              "disabled": true,
               "type": "BuiltinCommonInstructions::Standard",
               "conditions": [
                 {
@@ -4492,6 +4736,18 @@
                       ]
                     }
                   ]
+                },
+                {
+                  "type": "BuiltinCommonInstructions::Comment",
+                  "color": {
+                    "b": 109,
+                    "g": 230,
+                    "r": 255,
+                    "textB": 0,
+                    "textG": 0,
+                    "textR": 0
+                  },
+                  "comment": "* Archive Below"
                 },
                 {
                   "disabled": true,
@@ -4733,6 +4989,19 @@
               "comment": "* TODO seems buggy, every 5 or so sec, fast-backwards, so fixed = 5 (seems good but slow), 10"
             },
             {
+              "type": "BuiltinCommonInstructions::Comment",
+              "color": {
+                "b": 109,
+                "g": 230,
+                "r": 255,
+                "textB": 0,
+                "textG": 0,
+                "textR": 0
+              },
+              "comment": "* Archive Below"
+            },
+            {
+              "disabled": true,
               "type": "BuiltinCommonInstructions::Standard",
               "conditions": [
                 {
@@ -4904,6 +5173,7 @@
               ]
             },
             {
+              "disabled": true,
               "type": "BuiltinCommonInstructions::Standard",
               "conditions": [
                 {
@@ -5171,6 +5441,19 @@
               "comment": "* CW-Reality = CW-GDevelop"
             },
             {
+              "type": "BuiltinCommonInstructions::Comment",
+              "color": {
+                "b": 109,
+                "g": 230,
+                "r": 255,
+                "textB": 0,
+                "textG": 0,
+                "textR": 0
+              },
+              "comment": "* Archive Below"
+            },
+            {
+              "disabled": true,
               "type": "BuiltinCommonInstructions::Standard",
               "conditions": [],
               "actions": [
@@ -5781,6 +6064,7 @@
           "comment": ""
         },
         {
+          "disabled": true,
           "type": "BuiltinCommonInstructions::Standard",
           "conditions": [],
           "actions": [
