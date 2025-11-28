@@ -325,10 +325,10 @@ bool listTagEvent_Remove(tagData_Struct* out_tag) {
 // Server URL for real-time AprilTag data transmission
 //
 //// jwc 25-1120-0910 HTTP Server Configuration - matching TestServer
-//// jwc 25-1122-0930 y const char* TEST_SERVER_URL = "http://10.0.0.150:5000/client_to_server__smartcam_data_post";
-//// jwc 25-1123-0400 y const char* TEST_SERVER_URL = "http://172.19.216.7:5000/client_to_server__smartcam_data_post";
-//// jwc 25-1124-1410 y const char* TEST_SERVER_URL = "http://10.42.0.1:5000/client_to_server__smartcam_data_post";
-const char* TEST_SERVER_URL = "http://10.0.0.149:5000/client_to_server__smartcam_data_post";
+//// jwc 25-1122-0930 y const char* TEST_SERVER_URL = "http://10.0.0.150:5000/client_e32_to_server__smartcam_data_post";
+//// jwc 25-1123-0400 y const char* TEST_SERVER_URL = "http://172.19.216.7:5000/client_e32_to_server__smartcam_data_post";
+//// jwc 25-1124-1410 y const char* TEST_SERVER_URL = "http://10.42.0.1:5000/client_e32_to_server__smartcam_data_post";
+const char* TEST_SERVER_URL = "http://10.0.0.149:5000/client_e32_to_server__smartcam_data_post";
 
 //// jwc 25-1128-0100 VIDEO STREAMING - Proof of Concept
 // Video frame upload endpoint for human viewing
