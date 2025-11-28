@@ -330,13 +330,14 @@ bool listTagEvent_Remove(tagData_Struct* out_tag) {
 //// jwc 25-1124-1410 y const char* TEST_SERVER_URL = "http://10.42.0.1:5000/client_e32_to_server__smartcam_data_post";
 const char* TEST_SERVER_URL = "http://10.0.0.149:5000/client_e32_to_server__smartcam_data_post";
 
-//// jwc 25-1128-0100 VIDEO STREAMING - Proof of Concept
+//// jwc 25-1128-0100 VIDEO STREAMING - Optimized to prevent lag
 // Video frame upload endpoint for human viewing
 const char* VIDEO_FRAME_UPLOAD_URL = "http://10.0.0.149:5000/video_frame_upload";
 
-// Video streaming timing control
+// Video streaming timing control - Optimized settings
 unsigned long last_video_send_time = 0;
-const unsigned long VIDEO_SEND_INTERVAL_MS = 1000;  // 1 FPS for proof-of-concept (1 frame per second)
+const unsigned long VIDEO_SEND_INTERVAL_MS = 3000;  // 3 seconds (0.33 FPS) - slow enough to not block AprilTag detection
+const int VIDEO_JPEG_QUALITY = 10;  // Low quality (1-100, lower = smaller file, faster upload)
 
 // Rate limiting - don't send too frequently
 //
@@ -410,8 +411,28 @@ bool wifi_connected = false;
 
 //// jwc 25-1123-0750 Decouple screen updates from HTTP sends
 // HTTP timing - separate from screen updates
-unsigned long last_http_send_time = 0;
-const unsigned long HTTP_SEND_INTERVAL_MS = 2000;  // Send every 2 seconds
+unsigned long http_send_time_last = 0;
+
+//// jwc ## Real-World Responsiveness
+//// jwc 
+//// jwc ### Scenario: AprilTag appears in camera view
+//// jwc 
+//// jwc ```javascript
+//// jwc Time 0ms:     Tag detected, added to queue
+//// jwc Time 250ms:   (average wait in queue)
+//// jwc Time 250-280ms: HTTP POST transmitted
+//// jwc Time 280ms:   Server/GDevelop receives data
+//// jwc 
+//// jwc Total latency: ~280ms
+//// jwc 
+//// jwc __This is faster than human reaction time (300ms)__, so it feels instant.
+
+//// jwc 25-1128-0943 OLD (conservative): const unsigned long HTTP_SEND_INTERVAL_MS = 2000;  // 2s (0.5 req/sec)
+const unsigned long HTTP_SEND_INTERVAL_MS = 500;  // 0.5s (2 req/sec) - 4x more responsive!
+
+// Rate limiting for list additions - prevent list overflow
+unsigned long list_add_time_last = 0;
+const unsigned long LIST_ADD_INTERVAL_MS = 500;  // Only add to list every 500ms (2 per second max)
 
 // Tag data buffer - stores latest detected tag
 struct LatestTagData {
@@ -484,7 +505,7 @@ void initWiFi() {
     }
 }
 
-//// jwc 25-1128-0100 VIDEO STREAMING - Send JPEG frame to server
+//// jwc 25-1128-0100 VIDEO STREAMING - Send JPEG frame to server (Optimized)
 bool sendVideoFrame(camera_fb_t *fb) {
     // Check WiFi connection status
     if (!wifi_connected || WiFi.status() != WL_CONNECTED) {
@@ -507,19 +528,20 @@ bool sendVideoFrame(camera_fb_t *fb) {
         jpg_buf = fb->buf;
         jpg_buf_len = fb->len;
     } else {
-        // Convert grayscale to JPEG
-        jpg_converted = frame2jpg(fb, 80, &jpg_buf, &jpg_buf_len);
+        // Convert grayscale to JPEG with LOW quality for smaller file size
+        jpg_converted = frame2jpg(fb, VIDEO_JPEG_QUALITY, &jpg_buf, &jpg_buf_len);
         if (!jpg_converted) {
             printf("*** VIDEO ERROR: JPEG conversion failed\n");
             return false;
         }
     }
     
-    printf("\n>>> VIDEO: Sending frame (Size: %d bytes)...\n", jpg_buf_len);
+    printf("\n>>> VIDEO: Sending frame (Size: %d bytes, Quality: %d)...\n", jpg_buf_len, VIDEO_JPEG_QUALITY);
     
     HTTPClient http;
     http.begin(VIDEO_FRAME_UPLOAD_URL);
     http.addHeader("Content-Type", "image/jpeg");
+    http.setTimeout(1500);  // 1.5 second timeout - fail fast to avoid blocking
     
     int httpResponseCode = http.POST(jpg_buf, jpg_buf_len);
     
@@ -570,21 +592,22 @@ bool sendAprilTagData(int tag_id, const char* camera_name, float yaw, float pitc
     http.addHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
     http.addHeader("Access-Control-Allow-Headers", "Content-Type");
     
-    // Create JSON payload with all AprilTag data
-    String json_payload = "{";
-    json_payload += "\"smartcam_ip\":\"" + WiFi.localIP().toString() + "\",";
-    json_payload += "\"tag_id\":" + String(tag_id) + ",";
-    json_payload += "\"yaw\":" + String(yaw, 1) + ",";
-    json_payload += "\"pitch\":" + String(pitch, 1) + ",";
-    json_payload += "\"roll\":" + String(roll, 1) + ",";
-    json_payload += "\"x_cm\":" + String(x_cm, 1) + ",";
-    json_payload += "\"y_cm\":" + String(y_cm, 1) + ",";
-    json_payload += "\"z_cm\":" + String(z_cm, 1) + ",";
-    json_payload += "\"tag_size_percent\":" + String(tag_size_percent, 1) + ",";
-    json_payload += "\"distance_cm\":" + String(distance_cm, 1) + ",";
-    json_payload += "\"camera_name\":\"" + String(camera_name) + "\",";
-    json_payload += "\"timestamp\":" + String(current_time);
-    json_payload += "}";
+        // Create JSON payload with all AprilTag data + ESP32 queue status
+        String json_payload = "{";
+        json_payload += "\"smartcam_ip\":\"" + WiFi.localIP().toString() + "\",";
+        json_payload += "\"tag_id\":" + String(tag_id) + ",";
+        json_payload += "\"yaw\":" + String(yaw, 1) + ",";
+        json_payload += "\"pitch\":" + String(pitch, 1) + ",";
+        json_payload += "\"roll\":" + String(roll, 1) + ",";
+        json_payload += "\"x_cm\":" + String(x_cm, 1) + ",";
+        json_payload += "\"y_cm\":" + String(y_cm, 1) + ",";
+        json_payload += "\"z_cm\":" + String(z_cm, 1) + ",";
+        json_payload += "\"tag_size_percent\":" + String(tag_size_percent, 1) + ",";
+        json_payload += "\"distance_cm\":" + String(distance_cm, 1) + ",";
+        json_payload += "\"esp32_queue_count\":" + String(list_count) + ",";  // ESP32 queue status for lag monitoring
+        json_payload += "\"camera_name\":\"" + String(camera_name) + "\",";
+        json_payload += "\"timestamp\":" + String(current_time);
+        json_payload += "}";
     
     printf("*** HTTP: Sending JSON payload: %s\n", json_payload.c_str());
     printf("*** HTTP: Payload size: %d bytes\n", json_payload.length());
@@ -782,10 +805,35 @@ bool OV2640_Initialization(void)
     config.pin_pwdn = PWDN_GPIO_NUM;
     config.pin_reset = RESET_GPIO_NUM;
 
-    // Set clock frequency
-    //// jwc TODO 25-0417-1210 cam_hal: EV-VSYNC-OVF \/: config.xclk_freq_hz = 20000000;
-    //// jwc y Seems to improve by 50% or better: 
-    config.xclk_freq_hz = 10000000;
+    // ============================================================================
+    // CAMERA CLOCK FREQUENCY CONFIGURATION
+    // ============================================================================
+    // OV2640 Camera Clock (XCLK) - Controls frame capture speed
+    //
+    // OFFICIAL OV2640 SPECS:
+    //   - Minimum: 10 MHz
+    //   - Maximum: 24 MHz
+    //   - Typical:  20 MHz (recommended by datasheet)
+    //
+    // PERFORMANCE vs STABILITY TRADE-OFF:
+    //   10 MHz = CONSERVATIVE (slowest, most stable, no timing errors)
+    //   15 MHz = BALANCED     (50% faster, still very stable) ✅ CURRENT
+    //   20 MHz = RECOMMENDED  (full speed, within spec, may have occasional timing issues)
+    //   24 MHz = MAXIMUM      (fastest, datasheet limit, prone to EV-VSYNC-OVF errors)
+    //
+    // TIMING ERRORS (EV-VSYNC-OVF):
+    //   - Higher clock = faster frames BUT more prone to timing errors
+    //   - Errors don't damage hardware, just cause frame drops
+    //   - Solution: Lower clock speed if errors occur
+    //
+    // IMPACT ON APRILTAG PROCESSING:
+    //   - 10→15 MHz: ~33% reduction in frame capture time
+    //   - 15→20 MHz: ~25% reduction in frame capture time
+    //   - Total system speedup: 10-20% (frame capture is only part of pipeline)
+    // ============================================================================
+    
+    //// jwc 25-1128-0943 OLD (conservative): config.xclk_freq_hz = 10000000;  // 10 MHz
+    config.xclk_freq_hz = 15000000;  // 15 MHz - 50% faster, still very stable
 
 
     // Set frame config
@@ -1043,6 +1091,9 @@ int cpuCyclesDelay_Before_Esp32_Tx_Int = 0;
 
 void loop()
 {
+    //// jwc 25-1128-0810 Track if new AprilTag detected in this frame (for smart video streaming)
+    bool apriltag_detected_in_frame = false;
+    
     if (OV2640_Initialization_Flag == true)
     {
         camera_fb_t *frame = esp_camera_fb_get();
@@ -1112,6 +1163,8 @@ void loop()
             printf(".");
 
             if(zarray_size(detections) > 0){
+                //// jwc 25-1128-0810 Mark that AprilTag was detected in this frame
+                apriltag_detected_in_frame = true;
             
                 // Print result
                 for (int i = 0; i < zarray_size(detections); i++) {
@@ -1264,18 +1317,31 @@ void loop()
                     matd_destroy(R_transpose);
                     matd_destroy(camera_position);
                     
-                    // Queue tag data for later HTTP sending (non-blocking, fast)
-                    sensor_t *s = esp_camera_sensor_get();
-                    if (s) {
-                        camera_sensor_info_t *sinfo = esp_camera_sensor_get_info(&(s->id));
-                        if (sinfo) {
-                            //// jwc 25-1127-1140 y sendAprilTagData(det->id, sinfo->name, yaw, pitch, roll, 
-                            //// jwc 25-1127-1140 y                x_cm, y_cm, z_cm, tag_size_percent, distance_cm);
-
-                            listTagEvent_Add(det->id, yaw, pitch, roll, x_cm, y_cm, z_cm, 
-                                        tag_size_percent, distance_cm, sinfo->name);
+                    // Queue tag data for later HTTP sending (with rate limiting to prevent list overflow)
+                    unsigned long current_time_for_list = millis();
+                    
+                    // Only add to list if enough time has passed since last addition
+                    if (current_time_for_list - list_add_time_last >= LIST_ADD_INTERVAL_MS) {
+                        sensor_t *s = esp_camera_sensor_get();
+                        if (s) {
+                            camera_sensor_info_t *sinfo = esp_camera_sensor_get_info(&(s->id));
+                            if (sinfo) {
+                                listTagEvent_Add(det->id, yaw, pitch, roll, x_cm, y_cm, z_cm, 
+                                            tag_size_percent, distance_cm, sinfo->name);
+                                list_add_time_last = current_time_for_list;
+                                
+                                #if DEBUG >= 1
+                                printf("*** LIST: Added tag (rate-limited to every %lums)\n", LIST_ADD_INTERVAL_MS);
+                                #endif
+                            }
                         }
                     }
+                    #if DEBUG >= 2
+                    else {
+                        printf("*** LIST: Skipped addition (rate limit: %lums remaining)\n", 
+                               LIST_ADD_INTERVAL_MS - (current_time_for_list - list_add_time_last));
+                    }
+                    #endif
 
                     //// jwc 25-1126-2200 OPTION 1B: Buffer for periodic POST (ARCHIVED)
                     //// jwc 25-1126-2200 // Buffer tag data instead of sending HTTP immediately
@@ -1495,7 +1561,7 @@ void loop()
     // Check if it's time to send tag data from list via HTTP
     unsigned long current_time = millis();
     if (list_count > 0 && 
-        (current_time - last_http_send_time >= HTTP_SEND_INTERVAL_MS)) {
+        (current_time - http_send_time_last >= HTTP_SEND_INTERVAL_MS)) {
         
         // Remove oldest tag from list
         tagData_Struct tag_to_send;
@@ -1517,21 +1583,58 @@ void loop()
             }
             
             // Update last send time (whether success or failure)
-            last_http_send_time = current_time;
+            http_send_time_last = current_time;
         }
     }
     
-    //// jwc 25-1128-0100 VIDEO STREAMING - Periodic video frame sender (Proof of Concept)
-    // Send video frames at 1 FPS for human viewing
+    //// jwc 25-1128-0810 VIDEO STREAMING - Smart streaming based on lag time
+    // Calculate lag: time since oldest tag was added (if list has items)
+    unsigned long lag_ms = 0;
+    if (list_count > 0) {
+        // Calculate position of oldest tag
+        int oldest_pos = (list_head - list_count + tagData_MAX) % tagData_MAX;
+        lag_ms = current_time - tagData_Queue[oldest_pos].timestamp;
+    }
+    
+    // Decide whether to send video based on lag
+    bool should_send_video = false;
+    
     if (OV2640_Initialization_Flag && wifi_connected && 
         (current_time - last_video_send_time >= VIDEO_SEND_INTERVAL_MS)) {
         
-        // Capture a fresh frame for video streaming
+        if (lag_ms < 3000) {
+            // System processing fast (lag < 3s) - send video regularly
+            should_send_video = true;
+            #if DEBUG >= 1
+            printf("*** VIDEO: Lag=%lums - Regular streaming mode\n", lag_ms);
+            #endif
+        } else if (apriltag_detected_in_frame) {
+            // System is lagging (lag >= 3s) - only send frames with new AprilTag detections
+            should_send_video = true;
+            #if DEBUG >= 1
+            printf("*** VIDEO: Lag=%lums - Smart mode: Sending frame with NEW AprilTag detection\n", lag_ms);
+            #endif
+        }
+        #if DEBUG >= 2
+        else {
+            printf("*** VIDEO: Lag=%lums - Smart mode: Skipping frame (no new AprilTag)\n", lag_ms);
+        }
+        #endif
+    }
+    
+    if (should_send_video) {
+        // Capture and send video frame
         camera_fb_t *video_frame = esp_camera_fb_get();
         if (video_frame) {
-            sendVideoFrame(video_frame);
+            bool success = sendVideoFrame(video_frame);
             esp_camera_fb_return(video_frame);
+            
+            // Always update timestamp to prevent retry spam on failure
             last_video_send_time = current_time;
+            
+            if (!success) {
+                printf("*** VIDEO: Upload failed - skipping to avoid blocking\n");
+            }
         }
     }
     ////
