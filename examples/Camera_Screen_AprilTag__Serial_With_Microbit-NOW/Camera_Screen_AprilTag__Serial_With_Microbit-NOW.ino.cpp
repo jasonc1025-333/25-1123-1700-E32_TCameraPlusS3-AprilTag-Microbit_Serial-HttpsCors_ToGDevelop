@@ -335,7 +335,7 @@ const char* TEST_SERVER_URL = "http://10.0.0.149:5000/client_e32_to_server__smar
 const char* VIDEO_FRAME_UPLOAD_URL = "http://10.0.0.149:5000/video_frame_upload";
 
 // Video streaming timing control - Optimized settings
-unsigned long last_video_send_time = 0;
+unsigned long video_send_time_last = 0;
 const unsigned long VIDEO_SEND_INTERVAL_MS = 3000;  // 3 seconds (0.33 FPS) - slow enough to not block AprilTag detection
 const int VIDEO_JPEG_QUALITY = 10;  // Low quality (1-100, lower = smaller file, faster upload)
 
@@ -450,7 +450,8 @@ void initWiFi() {
     printf("*** WiFi Init: Starting...\n");
     printf("*** WiFi SSID: %s\n", WIFI_SSID);
     printf("*** WiFi Password: %s\n", WIFI_PASSWORD);
-    printf("*** WiFi Band: 2.4GHz (ESP32 only supports 2.4GHz)\n");
+    printf("*** WiFi Band: 2.4GHz ONLY (ESP32-S3 hardware limitation)\n");
+    printf("*** Note: Works with band-steering routers (e.g. Xfinity XB6) - router auto-assigns 2.4GHz band\n");
     //// jwc 25-1124-1700 printf("*** Server URL: %s\n", TEST_SERVER_URL);
     //// jwc 25-1124-1700 printf("*** HTTP Send Interval: %lu ms (%0.1f req/sec)\n", HTTP_SEND_INTERVAL_MS, 1000.0 / HTTP_SEND_INTERVAL_MS);
     
@@ -1600,7 +1601,7 @@ void loop()
     bool should_send_video = false;
     
     if (OV2640_Initialization_Flag && wifi_connected && 
-        (current_time - last_video_send_time >= VIDEO_SEND_INTERVAL_MS)) {
+        (current_time - video_send_time_last >= VIDEO_SEND_INTERVAL_MS)) {
         
         if (lag_ms < 3000) {
             // System processing fast (lag < 3s) - send video regularly
@@ -1630,7 +1631,7 @@ void loop()
             esp_camera_fb_return(video_frame);
             
             // Always update timestamp to prevent retry spam on failure
-            last_video_send_time = current_time;
+            video_send_time_last = current_time;
             
             if (!success) {
                 printf("*** VIDEO: Upload failed - skipping to avoid blocking\n");
