@@ -299,7 +299,7 @@ def home():
                                 data_age=data_age,
                                 recent_log=esp32_data_log[-10:])
 
-@app.route('/client_to_server__smartcam_data_post', methods=['POST', 'OPTIONS'])
+@app.route('/client_e32_to_server__smartcam_data_post', methods=['POST', 'OPTIONS'])
 def receive_esp32_apriltag_data():
     """Main endpoint to receive ESP32 SmartCam AprilTag data"""
     global latest_esp32_data, stats
@@ -566,7 +566,7 @@ def video_viewer():
                 <p><strong>Resolution:</strong> 240x240 pixels (grayscale)</p>
                 <p><strong>Frame Rate:</strong> ~1 FPS (proof of concept)</p>
                 <p><strong>Purpose:</strong> View what AprilTag detector sees</p>
-                <p><strong>AprilTag Data:</strong> <a href="/client_to_server__smartcam_data_get">View JSON</a></p>
+                <p><strong>AprilTag Data:</strong> <a href="/client_gdevelop_to_server__smartcam_data_get">View JSON</a></p>
                 <p><strong>Server Status:</strong> <a href="/">Main Dashboard</a></p>
             </div>
         </div>
@@ -575,7 +575,7 @@ def video_viewer():
     '''
     return html
 
-@app.route('/client_to_server__smartcam_data_get', methods=['GET', 'OPTIONS'])
+@app.route('/client_gdevelop_to_server__smartcam_data_get', methods=['GET', 'OPTIONS'])
 def serve_gdevelop_data():
     """GET endpoint for GDevelop to retrieve SmartCam AprilTag data from list"""
     
@@ -830,21 +830,21 @@ def print_startup_info():
     
     print(f"📍 Server URLs:")
     print(f"   Web Interface: http://{display_ip}:{ESP32_SERVER_PORT}/")
-    print(f"   ESP32 POST Endpoint: http://{display_ip}:{ESP32_SERVER_PORT}/client_to_server__smartcam_data_post")
-    print(f"   GDevelop GET Endpoint: http://{display_ip}:{ESP32_SERVER_PORT}/client_to_server__smartcam_data_get")
+    print(f"   ESP32 POST Endpoint: http://{display_ip}:{ESP32_SERVER_PORT}/client_e32_to_server__smartcam_data_post")
+    print(f"   GDevelop GET Endpoint: http://{display_ip}:{ESP32_SERVER_PORT}/client_gdevelop_to_server__smartcam_data_get")
     print(f"   Status Check: http://{display_ip}:{ESP32_SERVER_PORT}/esp32_status")
     
     if hotspot_ip and hotspot_ip != local_ip:
         print(f"\n💡 ESP32 Configuration:")
-        print(f'   const char* TEST_SERVER_URL = "http://{hotspot_ip}:{ESP32_SERVER_PORT}/client_to_server__smartcam_data_post";')
+        print(f'   const char* TEST_SERVER_URL = "http://{hotspot_ip}:{ESP32_SERVER_PORT}/client_e32_to_server__smartcam_data_post";')
     print("=" * 70)
     print("📋 Expected ESP32 JSON Format:")
     print('   {"tag_id": 5, "camera_name": "OV2640", "timestamp": 1234567890}')
     print("=" * 70)
     print("🚀 Ready to receive ESP32 SmartCam AprilTag data!")
     print("   - Make sure ESP32 is connected to WiFi")
-    print("   - ESP32 should POST to /client_to_server__smartcam_data_post endpoint")
-    print("   - GDevelop should GET from /client_to_server__smartcam_data_get endpoint")
+    print("   - ESP32 should POST to /client_e32_to_server__smartcam_data_post endpoint")
+    print("   - GDevelop should GET from /client_gdevelop_to_server__smartcam_data_get endpoint")
     print("   - View real-time data at web interface")
     if "5GHz" in wifi_band:
         print("   ⚠️  WARNING: Ubuntu on 5GHz! ESP32 needs 2.4GHz network!")
