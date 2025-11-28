@@ -196,8 +196,8 @@ struct tagData_Struct {
 };
 
 tagData_Struct tagData_Queue[tagData_MAX];
-int queue_head = 0;   // Write position
-int queue_count = 0;  // Number of events in queue
+int list_head = 0;   // Write position
+int list_count = 0;  // Number of events in list
 
 //// jwc 25-1126-2200 OPTION 2: GET Server (ARCHIVED)
 //// jwc 25-1126-2200 AsyncWebServer server(80);
@@ -235,30 +235,30 @@ struct NetworkLatencyStats {
     }
 } network_latency;
 
-// Queue tag detection for later HTTP sending (non-blocking, fast)
-void queueTagEvent(int id, float yaw, float pitch, float roll, float x_cm, float y_cm, float z_cm, 
+// Add tag detection to list for later HTTP sending (non-blocking, fast)
+void listTagEvent_Add(int id, float yaw, float pitch, float roll, float x_cm, float y_cm, float z_cm, 
                    float tag_size_percent, float distance_cm, const char* camera_name) {
-    if (queue_count < tagData_MAX) {
+    if (list_count < tagData_MAX) {
         unsigned long timestamp = millis();
-        tagData_Queue[queue_head] = {id, yaw, pitch, roll, x_cm, y_cm, z_cm, tag_size_percent, distance_cm, timestamp};
-        queue_head = (queue_head + 1) % tagData_MAX;
-        queue_count++;
+        tagData_Queue[list_head] = {id, yaw, pitch, roll, x_cm, y_cm, z_cm, tag_size_percent, distance_cm, timestamp};
+        list_head = (list_head + 1) % tagData_MAX;
+        list_count++;
         
         #if DEBUG >= 1
-        printf("*** QUEUED: Tag ID=%d, Queue=%d/%d\n", id, queue_count, tagData_MAX);
+        printf("*** ADDED TO LIST: Tag ID=%d, List=%d/%d\n", id, list_count, tagData_MAX);
         #endif
     } else {
-        printf("*** QUEUE FULL! Dropped Tag ID=%d\n", id);
+        printf("*** LIST FULL! Dropped Tag ID=%d\n", id);
     }
 }
 
-// Pop oldest tag from queue for HTTP sending
-bool popTagEvent(tagData_Struct* out_tag) {
-    if (queue_count > 0) {
+// Remove oldest tag from list for HTTP sending
+bool listTagEvent_Remove(tagData_Struct* out_tag) {
+    if (list_count > 0) {
         // Calculate read position (oldest event = FIFO)
-        int read_pos = (queue_head - queue_count + tagData_MAX) % tagData_MAX;
+        int read_pos = (list_head - list_count + tagData_MAX) % tagData_MAX;
         *out_tag = tagData_Queue[read_pos];
-        queue_count--;
+        list_count--;
         return true;
     }
     return false;
@@ -329,6 +329,14 @@ bool popTagEvent(tagData_Struct* out_tag) {
 //// jwc 25-1123-0400 y const char* TEST_SERVER_URL = "http://172.19.216.7:5000/client_to_server__smartcam_data_post";
 //// jwc 25-1124-1410 y const char* TEST_SERVER_URL = "http://10.42.0.1:5000/client_to_server__smartcam_data_post";
 const char* TEST_SERVER_URL = "http://10.0.0.149:5000/client_to_server__smartcam_data_post";
+
+//// jwc 25-1128-0100 VIDEO STREAMING - Proof of Concept
+// Video frame upload endpoint for human viewing
+const char* VIDEO_FRAME_UPLOAD_URL = "http://10.0.0.149:5000/video_frame_upload";
+
+// Video streaming timing control
+unsigned long last_video_send_time = 0;
+const unsigned long VIDEO_SEND_INTERVAL_MS = 1000;  // 1 FPS for proof-of-concept (1 frame per second)
 
 // Rate limiting - don't send too frequently
 //
@@ -473,6 +481,66 @@ void initWiFi() {
         gfx->setTextSize(2);
         gfx->setCursor(1, 220);
         gfx->printf("WiFi: FAILED");
+    }
+}
+
+//// jwc 25-1128-0100 VIDEO STREAMING - Send JPEG frame to server
+bool sendVideoFrame(camera_fb_t *fb) {
+    // Check WiFi connection status
+    if (!wifi_connected || WiFi.status() != WL_CONNECTED) {
+        printf("*** VIDEO ERROR: WiFi not connected\n");
+        return false;
+    }
+    
+    if (!fb) {
+        printf("*** VIDEO ERROR: No frame buffer provided\n");
+        return false;
+    }
+    
+    // Convert grayscale to JPEG (if not already JPEG)
+    uint8_t *jpg_buf = NULL;
+    size_t jpg_buf_len = 0;
+    bool jpg_converted = false;
+    
+    if (fb->format == PIXFORMAT_JPEG) {
+        // Already JPEG
+        jpg_buf = fb->buf;
+        jpg_buf_len = fb->len;
+    } else {
+        // Convert grayscale to JPEG
+        jpg_converted = frame2jpg(fb, 80, &jpg_buf, &jpg_buf_len);
+        if (!jpg_converted) {
+            printf("*** VIDEO ERROR: JPEG conversion failed\n");
+            return false;
+        }
+    }
+    
+    printf("\n>>> VIDEO: Sending frame (Size: %d bytes)...\n", jpg_buf_len);
+    
+    HTTPClient http;
+    http.begin(VIDEO_FRAME_UPLOAD_URL);
+    http.addHeader("Content-Type", "image/jpeg");
+    
+    int httpResponseCode = http.POST(jpg_buf, jpg_buf_len);
+    
+    if (httpResponseCode > 0) {
+        printf(">>> VIDEO SUCCESS: Frame uploaded (Code: %d)\n", httpResponseCode);
+        http.end();
+        
+        // Free converted JPEG buffer if we allocated it
+        if (jpg_converted && jpg_buf) {
+            free(jpg_buf);
+        }
+        return true;
+    } else {
+        printf(">>> VIDEO FAILURE: Upload failed (Code: %d)\n", httpResponseCode);
+        http.end();
+        
+        // Free converted JPEG buffer if we allocated it
+        if (jpg_converted && jpg_buf) {
+            free(jpg_buf);
+        }
+        return false;
     }
 }
 
@@ -1204,7 +1272,7 @@ void loop()
                             //// jwc 25-1127-1140 y sendAprilTagData(det->id, sinfo->name, yaw, pitch, roll, 
                             //// jwc 25-1127-1140 y                x_cm, y_cm, z_cm, tag_size_percent, distance_cm);
 
-                            queueTagEvent(det->id, yaw, pitch, roll, x_cm, y_cm, z_cm, 
+                            listTagEvent_Add(det->id, yaw, pitch, roll, x_cm, y_cm, z_cm, 
                                         tag_size_percent, distance_cm, sinfo->name);
                         }
                     }
@@ -1423,17 +1491,17 @@ void loop()
 
     }
     
-    //// jwc 25-1127-1130 PERIODIC HTTP SENDER - Processes queue one tag at a time
-    // Check if it's time to send queued tag data via HTTP
+    //// jwc 25-1127-1130 PERIODIC HTTP SENDER - Processes list one tag at a time
+    // Check if it's time to send tag data from list via HTTP
     unsigned long current_time = millis();
-    if (queue_count > 0 && 
+    if (list_count > 0 && 
         (current_time - last_http_send_time >= HTTP_SEND_INTERVAL_MS)) {
         
-        // Pop oldest tag from queue
+        // Remove oldest tag from list
         tagData_Struct tag_to_send;
-        if (popTagEvent(&tag_to_send)) {
+        if (listTagEvent_Remove(&tag_to_send)) {
             #if DEBUG >= 1
-            printf("\n*** HTTP: Sending queued tag (Queue: %d remaining)...\n", queue_count);
+            printf("\n*** HTTP: Sending tag from list (List: %d remaining)...\n", list_count);
             #endif
             
             // Send via HTTP POST
@@ -1450,6 +1518,20 @@ void loop()
             
             // Update last send time (whether success or failure)
             last_http_send_time = current_time;
+        }
+    }
+    
+    //// jwc 25-1128-0100 VIDEO STREAMING - Periodic video frame sender (Proof of Concept)
+    // Send video frames at 1 FPS for human viewing
+    if (OV2640_Initialization_Flag && wifi_connected && 
+        (current_time - last_video_send_time >= VIDEO_SEND_INTERVAL_MS)) {
+        
+        // Capture a fresh frame for video streaming
+        camera_fb_t *video_frame = esp_camera_fb_get();
+        if (video_frame) {
+            sendVideoFrame(video_frame);
+            esp_camera_fb_return(video_frame);
+            last_video_send_time = current_time;
         }
     }
     ////

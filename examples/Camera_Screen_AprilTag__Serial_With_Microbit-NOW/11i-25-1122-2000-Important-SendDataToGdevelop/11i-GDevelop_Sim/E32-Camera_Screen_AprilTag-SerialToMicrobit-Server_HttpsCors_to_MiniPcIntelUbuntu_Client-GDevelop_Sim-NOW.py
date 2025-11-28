@@ -100,7 +100,7 @@ class TagData:
         self.distance_cm = 0.0
         self.timestamp = 0
 
-# Global queue for AprilTag data (mirrors ESP32 structure)
+# Global list for AprilTag data (mirrors ESP32 structure)
 tagData_List_Fifo = []
 tagData_List_Fifo_Count_Base1 = 0
 tagData_List_Fifo_Count_MAX_Base1 = 50
@@ -115,6 +115,11 @@ latest_esp32_data = {
     'status': 'waiting_for_data'
 }
 
+# jwc 25-1128-0100 VIDEO STREAMING - Storage for latest video frame
+video_frame_latest = None
+video_frame_lock = threading.Lock()
+video_frame_count = 0
+
 # Statistics
 stats = {
     'total_requests': 0,
@@ -122,7 +127,7 @@ stats = {
     'failed_requests': 0,
     'unique_tag_ids': set(),
     'start_time': time.time(),
-    'queue_overflows': 0
+    'list_overflows': 0
 }
 
 # Create Flask app
@@ -244,22 +249,22 @@ def log_esp32_data(message, level="INFO"):
     print(log_entry)
 
 def AprilTag_List_Fifo_Push(tag_data):
-    """Add tag data to circular queue (FIFO with oldest drop on overflow)"""
+    """Add tag data to circular list (FIFO with oldest drop on overflow)"""
     global tagData_List_Fifo_Index_Head_Base0, tagData_List_Fifo_Count_Base1, stats
     
     if tagData_List_Fifo_Count_Base1 < tagData_List_Fifo_Count_MAX_Base1:
-        # Queue not full, just append
+        # List not full, just append
         tagData_List_Fifo.append(tag_data)
         tagData_List_Fifo_Count_Base1 += 1
     else:
-        # Queue full, drop oldest (FIFO)
+        # List full, drop oldest (FIFO)
         tagData_List_Fifo[tagData_List_Fifo_Index_Head_Base0] = tag_data
         tagData_List_Fifo_Index_Head_Base0 = (tagData_List_Fifo_Index_Head_Base0 + 1) % tagData_List_Fifo_Count_MAX_Base1
-        stats['queue_overflows'] += 1
-        log_esp32_data(f"⚠️  Queue overflow! Dropped oldest event. Total overflows: {stats['queue_overflows']}", "WARN")
+        stats['list_overflows'] += 1
+        log_esp32_data(f"⚠️  List overflow! Dropped oldest event. Total overflows: {stats['list_overflows']}", "WARN")
 
 def AprilTag_List_Fifo_Pop():
-    """Remove and return oldest tag data from queue"""
+    """Remove and return oldest tag data from list"""
     global tagData_List_Fifo_Index_Head_Base0, tagData_List_Fifo_Count_Base1
     
     if tagData_List_Fifo_Count_Base1 == 0:
@@ -363,7 +368,7 @@ def receive_esp32_apriltag_data():
         tag_data.distance_cm = distance_cm
         tag_data.timestamp = server_receive_time  # Use server time, not ESP32 millis()
         
-        # Push to queue
+        # Push to list
         AprilTag_List_Fifo_Push(tag_data)
         
         # Calculate ESP32->Server latency (if ESP32 timestamp was in millis, we can't accurately calculate)
@@ -389,7 +394,7 @@ def receive_esp32_apriltag_data():
             f"Pos=({x_cm:.1f},{y_cm:.1f},{z_cm:.1f})cm, "
             f"Dist={distance_cm:.1f}cm, Size={tag_size_percent:.1f}%, "
             f"Latency={network_latency_ms:.1f}ms, "
-            f"Queue={tagData_List_Fifo_Count_Base1}/{tagData_List_Fifo_Count_MAX_Base1}",
+            f"List={tagData_List_Fifo_Count_Base1}/{tagData_List_Fifo_Count_MAX_Base1}",
             "SUCCESS"
         )
         
@@ -457,19 +462,132 @@ def test_esp32_connection():
         }
     })
 
-@app.route('/client_to_server__smartcam_data_get', methods=['GET', 'OPTIONS'])
-def serve_gdevelop_data():
-    """GET endpoint for GDevelop to retrieve SmartCam AprilTag data from queue"""
+# jwc 25-1128-0100 VIDEO STREAMING - Upload endpoint for ESP32 to send JPEG frames
+@app.route('/video_frame_upload', methods=['POST', 'OPTIONS'])
+def video_frame_receive():
+    """Receive JPEG video frames from ESP32"""
+    global video_frame_latest, video_frame_count
     
     # Handle CORS preflight
     if request.method == 'OPTIONS':
         return '', 200
     
-    # Pop oldest event from queue
+    try:
+        # Get raw JPEG data from ESP32
+        frame_data = request.data
+        
+        if not frame_data or len(frame_data) == 0:
+            print("⚠️  VIDEO: Received empty frame")
+            return jsonify({'error': 'Empty frame data'}), 400
+        
+        # Store frame with thread safety
+        with video_frame_lock:
+            video_frame_latest = frame_data
+            video_frame_count += 1
+        
+        print(f"📹 VIDEO: Frame received ({len(frame_data)} bytes, total frames: {video_frame_count})")
+        
+        return jsonify({
+            'status': 'success',
+            'frame_size': len(frame_data),
+            'frame_count': video_frame_count
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ VIDEO ERROR: {str(e)}")
+        return jsonify({'error': str(e)}), 500
+
+# jwc 25-1128-0100 VIDEO STREAMING - MJPEG stream endpoint for browser viewing
+@app.route('/video_stream')
+def video_stream():
+    """Stream video frames as MJPEG for browser viewing"""
+    def generate():
+        """Generate MJPEG stream"""
+        while True:
+            with video_frame_lock:
+                if video_frame_latest:
+                    # Send frame as part of multipart stream
+                    yield (b'--frame\r\n'
+                           b'Content-Type: image/jpeg\r\n\r\n' + 
+                           video_frame_latest + b'\r\n')
+                else:
+                    # No frame yet, send placeholder or wait
+                    pass
+            time.sleep(0.1)  # 10 FPS display rate (even if receiving 1 FPS)
+    
+    from flask import Response
+    return Response(generate(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
+
+# jwc 25-1128-0100 VIDEO STREAMING - Simple HTML viewer page
+@app.route('/video_viewer')
+def video_viewer():
+    """Simple HTML page to view video stream"""
+    html = '''
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>ESP32 Video Stream - Proof of Concept</title>
+        <style>
+            body { 
+                font-family: Arial, sans-serif; 
+                margin: 20px; 
+                background-color: #2c3e50;
+                color: white;
+                text-align: center;
+            }
+            .container { max-width: 800px; margin: 0 auto; }
+            h1 { color: #3498db; }
+            img { 
+                border: 3px solid #3498db; 
+                border-radius: 10px;
+                max-width: 100%;
+                background-color: #34495e;
+            }
+            .info {
+                background-color: #34495e;
+                padding: 15px;
+                border-radius: 10px;
+                margin-top: 20px;
+            }
+            a { color: #3498db; text-decoration: none; }
+            a:hover { text-decoration: underline; }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>📹 ESP32 Live Video Stream</h1>
+            <p><strong>Proof of Concept: 1 FPS Grayscale Stream</strong></p>
+            
+            <img src="/video_stream" alt="ESP32 Camera Stream" width="640">
+            
+            <div class="info">
+                <h3>ℹ️ Stream Information</h3>
+                <p><strong>Resolution:</strong> 240x240 pixels (grayscale)</p>
+                <p><strong>Frame Rate:</strong> ~1 FPS (proof of concept)</p>
+                <p><strong>Purpose:</strong> View what AprilTag detector sees</p>
+                <p><strong>AprilTag Data:</strong> <a href="/client_to_server__smartcam_data_get">View JSON</a></p>
+                <p><strong>Server Status:</strong> <a href="/">Main Dashboard</a></p>
+            </div>
+        </div>
+    </body>
+    </html>
+    '''
+    return html
+
+@app.route('/client_to_server__smartcam_data_get', methods=['GET', 'OPTIONS'])
+def serve_gdevelop_data():
+    """GET endpoint for GDevelop to retrieve SmartCam AprilTag data from list"""
+    
+    # Handle CORS preflight
+    if request.method == 'OPTIONS':
+        return '', 200
+    
+    # Pop oldest event from list
     tag_data = AprilTag_List_Fifo_Pop()
     
     if tag_data is None:
-        # No data in queue - return empty flat structure
+        # No data in list - return empty flat structure
         return jsonify({
             'smartcam_ip': '',
             'tag_id': -1,
@@ -483,7 +601,7 @@ def serve_gdevelop_data():
             'tag_size_percent': 0.0,
             'distance_cm': 0.0,
             'timestamp': 0,
-            'queue_remaining': 0
+            'list_remaining': 0
         })
     
     # Calculate retrieval latency (time from ESP32 send to GDevelop retrieval)
@@ -504,7 +622,7 @@ def serve_gdevelop_data():
         'tag_size_percent': tag_data.tag_size_percent,
         'distance_cm': tag_data.distance_cm,
         'timestamp': tag_data.timestamp,
-        'queue_remaining': tagData_List_Fifo_Count_Base1
+        'list_remaining': tagData_List_Fifo_Count_Base1
     }
     
     # DEBUG: Print data being sent to GDevelop
@@ -519,7 +637,7 @@ def serve_gdevelop_data():
     log_esp32_data(
         f"📤 SENT: Tag ID={tag_data.tag_id}, IP={tag_data.smartcam_ip}, "
         f"Total_Latency={total_latency_ms:.1f}ms, "
-        f"Queue={tagData_List_Fifo_Count_Base1}/{tagData_List_Fifo_Count_MAX_Base1}",
+        f"List={tagData_List_Fifo_Count_Base1}/{tagData_List_Fifo_Count_MAX_Base1}",
         "SUCCESS"
     )
     
