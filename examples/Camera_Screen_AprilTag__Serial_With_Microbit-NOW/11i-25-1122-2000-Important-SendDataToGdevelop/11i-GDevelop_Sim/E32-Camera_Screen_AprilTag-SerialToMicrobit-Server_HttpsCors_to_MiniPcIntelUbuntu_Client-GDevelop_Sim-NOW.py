@@ -79,6 +79,7 @@ import time
 import json
 from datetime import datetime
 import threading
+import logging
 
 # Configuration
 ESP32_SERVER_PORT = 5000
@@ -108,12 +109,16 @@ tagData_List_Fifo_Index_Head_Base0 = 0
 
 # Global storage for received ESP32 data
 esp32_data_log = []
-latest_esp32_data = {
+esp32_data_latest = {
     'id': None,
     'camera_name': None,
     'timestamp': None,
     'status': 'waiting_for_data'
 }
+
+# jwc 25-1128-0820 Smart empty response tracking - print once on entry, print total on exit
+empty_response_count = 0
+empty_response_mode = False  # Track if we're in "empty mode"
 
 # jwc 25-1128-0100 VIDEO STREAMING - Storage for latest video frame
 video_frame_latest = None
@@ -264,16 +269,25 @@ def AprilTag_List_Fifo_Push(tag_data):
         log_esp32_data(f"⚠️  List overflow! Dropped oldest event. Total overflows: {stats['list_overflows']}", "WARN")
 
 def AprilTag_List_Fifo_Pop():
-    """Remove and return oldest tag data from list"""
+    """Remove and return oldest tag data from list (FIFO - First In, First Out)"""
     global tagData_List_Fifo_Index_Head_Base0, tagData_List_Fifo_Count_Base1
     
     if tagData_List_Fifo_Count_Base1 == 0:
         return None
     
-    # Get oldest event
-    tag_data = tagData_List_Fifo[tagData_List_Fifo_Index_Head_Base0]
-    tagData_List_Fifo_Index_Head_Base0 = (tagData_List_Fifo_Index_Head_Base0 + 1) % tagData_List_Fifo_Count_MAX_Base1
-    tagData_List_Fifo_Count_Base1 -= 1
+    # For a proper FIFO that grows with append():
+    # - When not full: items are at [0, 1, 2, ...], oldest is always at index 0
+    # - When full: using circular buffer, oldest is at head position
+    
+    if len(tagData_List_Fifo) < tagData_List_Fifo_Count_MAX_Base1:
+        # List hasn't wrapped yet - simple FIFO from front
+        tag_data = tagData_List_Fifo.pop(0)  # Remove from front (oldest)
+        tagData_List_Fifo_Count_Base1 -= 1
+    else:
+        # List is full - circular buffer mode
+        tag_data = tagData_List_Fifo[tagData_List_Fifo_Index_Head_Base0]
+        tagData_List_Fifo_Index_Head_Base0 = (tagData_List_Fifo_Index_Head_Base0 + 1) % tagData_List_Fifo_Count_MAX_Base1
+        tagData_List_Fifo_Count_Base1 -= 1
     
     return tag_data
 
@@ -284,9 +298,9 @@ def home():
     
     # Calculate data age
     data_age = "N/A"
-    if latest_esp32_data['timestamp']:
+    if esp32_data_latest['timestamp']:
         try:
-            data_age = int(time.time() - latest_esp32_data['timestamp'])
+            data_age = int(time.time() - esp32_data_latest['timestamp'])
         except:
             data_age = "Unknown"
     
@@ -295,14 +309,14 @@ def home():
                                 server_port=ESP32_SERVER_PORT,
                                 stats=stats,
                                 uptime=uptime_minutes,
-                                latest_data=latest_esp32_data,
+                                latest_data=esp32_data_latest,
                                 data_age=data_age,
                                 recent_log=esp32_data_log[-10:])
 
 @app.route('/client_e32_to_server__smartcam_data_post', methods=['POST', 'OPTIONS'])
 def receive_esp32_apriltag_data():
     """Main endpoint to receive ESP32 SmartCam AprilTag data"""
-    global latest_esp32_data, stats
+    global esp32_data_latest, stats
     
     # Handle CORS preflight
     if request.method == 'OPTIONS':
@@ -376,7 +390,7 @@ def receive_esp32_apriltag_data():
         network_latency_ms = 0  # Can't calculate accurately without synced clocks
         
         # Update global data for web interface
-        latest_esp32_data = {
+        esp32_data_latest = {
             'id': tag_id,
             'camera_name': smartcam_ip,
             'timestamp': timestamp,
@@ -429,8 +443,8 @@ def esp32_status():
     
     return jsonify({
         'server_status': 'online',
-        'esp32_communication': latest_esp32_data['status'],
-        'latest_data': latest_esp32_data,
+        'esp32_communication': esp32_data_latest['status'],
+        'latest_data': esp32_data_latest,
         'statistics': {
             'total_requests': stats['total_requests'],
             'successful_requests': stats['successful_requests'],
@@ -557,14 +571,15 @@ def video_viewer():
     <body>
         <div class="container">
             <h1>📹 ESP32 Live Video Stream</h1>
-            <p><strong>Proof of Concept: 1 FPS Grayscale Stream</strong></p>
+            <p><strong>Optimized: Low-Quality Stream (Reduced Lag)</strong></p>
             
-            <img src="/video_stream" alt="ESP32 Camera Stream" width="640">
+            <img src="/video_stream" alt="ESP32 Camera Stream" width="240" height="240">
             
             <div class="info">
                 <h3>ℹ️ Stream Information</h3>
                 <p><strong>Resolution:</strong> 240x240 pixels (grayscale)</p>
-                <p><strong>Frame Rate:</strong> ~1 FPS (proof of concept)</p>
+                <p><strong>JPEG Quality:</strong> 10/100 (optimized for minimal lag)</p>
+                <p><strong>Frame Rate:</strong> 0.33 FPS (1 frame every 3 seconds)</p>
                 <p><strong>Purpose:</strong> View what AprilTag detector sees</p>
                 <p><strong>AprilTag Data:</strong> <a href="/client_gdevelop_to_server__smartcam_data_get">View JSON</a></p>
                 <p><strong>Server Status:</strong> <a href="/">Main Dashboard</a></p>
@@ -578,6 +593,7 @@ def video_viewer():
 @app.route('/client_gdevelop_to_server__smartcam_data_get', methods=['GET', 'OPTIONS'])
 def serve_gdevelop_data():
     """GET endpoint for GDevelop to retrieve SmartCam AprilTag data from list"""
+    global empty_response_count, empty_response_mode
     
     # Handle CORS preflight
     if request.method == 'OPTIONS':
@@ -587,7 +603,17 @@ def serve_gdevelop_data():
     tag_data = AprilTag_List_Fifo_Pop()
     
     if tag_data is None:
-        # No data in list - return empty flat structure
+        # No data in list - smart empty mode tracking
+        if not empty_response_mode:
+            # First empty response - enter empty mode
+            empty_response_mode = True
+            empty_response_count = 1
+            print(f"⚪ EMPTY MODE: Started (no tags in list)")
+        else:
+            # Already in empty mode - count silently
+            empty_response_count += 1
+        
+        # Return empty flat structure
         return jsonify({
             'smartcam_ip': '',
             'tag_id': -1,
@@ -603,6 +629,12 @@ def serve_gdevelop_data():
             'timestamp': 0,
             'list_remaining': 0
         })
+    
+    # Exit empty mode if we were in it
+    if empty_response_mode:
+        print(f"⚪ EMPTY MODE: Ended (Total empty responses: {empty_response_count}x)")
+        empty_response_mode = False
+        empty_response_count = 0
     
     # Calculate retrieval latency (time from ESP32 send to GDevelop retrieval)
     retrieval_time = time.time()
@@ -851,6 +883,10 @@ def print_startup_info():
     print("=" * 70)
 
 if __name__ == '__main__':
+    # Disable Flask's default request logging to reduce console clutter
+    log = logging.getLogger('werkzeug')
+    log.setLevel(logging.ERROR)  # Only show errors, not every HTTP request
+    
     print_startup_info()
     
     # Start Flask server
