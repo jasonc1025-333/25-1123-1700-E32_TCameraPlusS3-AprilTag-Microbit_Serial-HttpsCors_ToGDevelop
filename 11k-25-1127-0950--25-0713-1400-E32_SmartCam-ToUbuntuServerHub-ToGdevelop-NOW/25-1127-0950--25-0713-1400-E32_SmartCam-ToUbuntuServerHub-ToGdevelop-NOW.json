@@ -5278,31 +5278,11 @@
                 },
                 {
                   "type": {
-                    "value": "SourisSurObjet"
-                  },
-                  "parameters": [
-                    "Power_Shield_02_3DBox",
-                    "",
-                    "",
-                    ""
-                  ]
-                },
-                {
-                  "type": {
                     "value": "PanelSpriteButton::PanelSpriteButton::IsPressed"
                   },
                   "parameters": [
                     "TinyGreenButton_02",
                     "="
-                  ]
-                },
-                {
-                  "type": {
-                    "value": "SpriteToggleSwitch::SpriteToggleSwitch::HasJustBeenToggled"
-                  },
-                  "parameters": [
-                    "SmallGreenPlasticRoundToggle_02",
-                    ""
                   ]
                 }
               ]
@@ -5383,7 +5363,28 @@
             {
               "disabled": true,
               "type": "BuiltinCommonInstructions::Standard",
-              "conditions": [],
+              "conditions": [
+                {
+                  "type": {
+                    "value": "SpriteToggleSwitch::SpriteToggleSwitch::HasJustBeenToggled"
+                  },
+                  "parameters": [
+                    "SmallGreenPlasticRoundToggle_02",
+                    ""
+                  ]
+                },
+                {
+                  "type": {
+                    "value": "SourisSurObjet"
+                  },
+                  "parameters": [
+                    "Power_Shield_02_3DBox",
+                    "",
+                    "",
+                    ""
+                  ]
+                }
+              ],
               "actions": [
                 {
                   "type": {
@@ -5413,17 +5414,6 @@
                     "value": "DepartScene"
                   },
                   "parameters": [
-                    ""
-                  ]
-                },
-                {
-                  "type": {
-                    "value": "SourisSurObjet"
-                  },
-                  "parameters": [
-                    "Power_Shield_03_3DBox",
-                    "",
-                    "",
                     ""
                   ]
                 },
@@ -5510,6 +5500,24 @@
                   ]
                 }
               ]
+            },
+            {
+              "disabled": true,
+              "type": "BuiltinCommonInstructions::Standard",
+              "conditions": [
+                {
+                  "type": {
+                    "value": "SourisSurObjet"
+                  },
+                  "parameters": [
+                    "Power_Shield_03_3DBox",
+                    "",
+                    "",
+                    ""
+                  ]
+                }
+              ],
+              "actions": []
             }
           ]
         },
@@ -5527,17 +5535,6 @@
                     "value": "DepartScene"
                   },
                   "parameters": [
-                    ""
-                  ]
-                },
-                {
-                  "type": {
-                    "value": "SourisSurObjet"
-                  },
-                  "parameters": [
-                    "Power_Shield_04_3DBox",
-                    "",
-                    "",
                     ""
                   ]
                 },
@@ -5624,6 +5621,24 @@
                   ]
                 }
               ]
+            },
+            {
+              "disabled": true,
+              "type": "BuiltinCommonInstructions::Standard",
+              "conditions": [
+                {
+                  "type": {
+                    "value": "SourisSurObjet"
+                  },
+                  "parameters": [
+                    "Power_Shield_04_3DBox",
+                    "",
+                    "",
+                    ""
+                  ]
+                }
+              ],
+              "actions": []
             }
           ]
         },
