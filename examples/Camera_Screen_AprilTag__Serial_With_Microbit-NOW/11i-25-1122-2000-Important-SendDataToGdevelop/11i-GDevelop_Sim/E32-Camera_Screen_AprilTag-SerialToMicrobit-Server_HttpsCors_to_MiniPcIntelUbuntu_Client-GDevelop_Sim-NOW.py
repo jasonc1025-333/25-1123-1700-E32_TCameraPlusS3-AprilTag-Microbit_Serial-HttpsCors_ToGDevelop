@@ -313,7 +313,7 @@ def home():
                                 data_age=data_age,
                                 recent_log=esp32_data_log[-10:])
 
-@app.route('/client_e32_to_server__smartcam_data_post', methods=['POST', 'OPTIONS'])
+@app.route('/client_e32__http_post_to_serverhub__smartcam_april_tag', methods=['POST', 'OPTIONS'])
 def receive_esp32_apriltag_data():
     """Main endpoint to receive ESP32 SmartCam AprilTag data"""
     global esp32_data_latest, stats
@@ -477,7 +477,7 @@ def test_esp32_connection():
     })
 
 # jwc 25-1128-0100 VIDEO STREAMING - Upload endpoint for ESP32 to send JPEG frames
-@app.route('/video_frame_upload', methods=['POST', 'OPTIONS'])
+@app.route('/client_e32__http_post_to_serverhub__smartcam_video_stream', methods=['POST', 'OPTIONS'])
 def video_frame_receive():
     """Receive JPEG video frames from ESP32"""
     global video_frame_latest, video_frame_count
@@ -595,9 +595,51 @@ def serve_gdevelop_data():
     """GET endpoint for GDevelop to retrieve SmartCam AprilTag data from list"""
     global empty_response_count, empty_response_mode
     
-    # Handle CORS preflight
+    # ============================================================================
+    # jwc 25-1129-1815 CORS FIX for GDevelop Access
+    # ============================================================================
+    # PROBLEM: GDevelop (running at games.gdevelop-app.com) was blocked by CORS
+    #          Browser error: "No 'Access-Control-Allow-Origin' header"
+    # 
+    # ROOT CAUSE: OPTIONS preflight request had NO CORS headers
+    # 
+    # SOLUTION: Add explicit CORS headers to OPTIONS response
+    # 
+    # CORS FLOW:
+    #   1. GDevelop sends OPTIONS request (preflight check)
+    #   2. Server responds with CORS headers (tells browser "this is safe")
+    #   3. Browser allows actual GET request
+    #   4. GDevelop receives AprilTag data ✅
+    # ============================================================================
+    
     if request.method == 'OPTIONS':
-        return '', 200
+        # Debug: Log OPTIONS preflight request from GDevelop
+        print("\n" + "🔵"*35)
+        print("🔵 CORS PREFLIGHT: OPTIONS Request Received")
+        print("🔵 Origin:", request.headers.get('Origin', 'Not provided'))
+        print("🔵 Purpose: Browser checking if cross-origin request is allowed")
+        print("🔵"*35)
+        
+        # Create response with proper CORS headers
+        response = make_response('', 200)
+        
+        # Header 1: Allow requests from ANY origin (games.gdevelop-app.com, etc.)
+        response.headers['Access-Control-Allow-Origin'] = '*'
+        print("🔵 ✅ Added header: Access-Control-Allow-Origin: *")
+        
+        # Header 2: Allow GET and OPTIONS methods
+        response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
+        print("🔵 ✅ Added header: Access-Control-Allow-Methods: GET, OPTIONS")
+        
+        # Header 3: Allow Content-Type header in requests
+        response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+        print("🔵 ✅ Added header: Access-Control-Allow-Headers: Content-Type")
+        
+        print("🔵 ✅ CORS PREFLIGHT: Response sent with all CORS headers")
+        print("🔵 ✅ Browser will now allow actual GET request from GDevelop")
+        print("🔵"*35 + "\n")
+        
+        return response
     
     # Pop oldest event from list
     tag_data = AprilTag_List_Fifo_Pop()
@@ -679,6 +721,16 @@ def serve_gdevelop_data():
     response.headers['Access-Control-Allow-Methods'] = 'GET, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     response.headers['Content-Type'] = 'application/json'
+    
+    # jwc 25-1129-2300 DEBUG: Show CORS headers being applied to GET response
+    print("\n" + "🟢"*35)
+    print("🟢 GET RESPONSE: CORS Headers Applied")
+    print(f"🟢 ✅ Access-Control-Allow-Origin: {response.headers.get('Access-Control-Allow-Origin')}")
+    print(f"🟢 ✅ Access-Control-Allow-Methods: {response.headers.get('Access-Control-Allow-Methods')}")
+    print(f"🟢 ✅ Access-Control-Allow-Headers: {response.headers.get('Access-Control-Allow-Headers')}")
+    print(f"🟢 ✅ Content-Type: {response.headers.get('Content-Type')}")
+    print("🟢 ✅ Response ready to send to GDevelop with all CORS headers")
+    print("🟢"*35 + "\n")
     
     return response
 
@@ -857,27 +909,33 @@ def print_startup_info():
     print(f"🔌 Server Port: {ESP32_SERVER_PORT}")
     print("=" * 70)
     
-    # Display URLs with the most appropriate IP
+    # Display URLs with ngrok domain (for public access)
+    ngrok_domain = "https://mallard-happy-singularly.ngrok-free.app"
     display_ip = hotspot_ip if hotspot_ip else local_ip
     
     print(f"📍 Server URLs:")
-    print(f"   Web Interface: http://{display_ip}:{ESP32_SERVER_PORT}/")
-    print(f"   ESP32 POST Endpoint: http://{display_ip}:{ESP32_SERVER_PORT}/client_e32_to_server__smartcam_data_post")
-    print(f"   GDevelop GET Endpoint: http://{display_ip}:{ESP32_SERVER_PORT}/client_gdevelop_to_server__smartcam_data_get")
-    print(f"   Status Check: http://{display_ip}:{ESP32_SERVER_PORT}/esp32_status")
+    print(f"   🌍 PUBLIC (via ngrok):")
+    print(f"      ESP32 AprilTag POST: {ngrok_domain}/client_e32__http_post_to_serverhub__smartcam_april_tag")
+    print(f"      ESP32 Video POST: {ngrok_domain}/client_e32__http_post_to_serverhub__smartcam_video_stream")
+    print(f"      GDevelop GET: {ngrok_domain}/client_gdevelop_to_server__smartcam_data_get")
+    print(f"   🏠 LOCAL (direct access):")
+    print(f"      Web Interface: http://{display_ip}:{ESP32_SERVER_PORT}/")
+    print(f"      Status Check: http://{display_ip}:{ESP32_SERVER_PORT}/esp32_status")
     
     if hotspot_ip and hotspot_ip != local_ip:
-        print(f"\n💡 ESP32 Configuration:")
-        print(f'   const char* TEST_SERVER_URL = "http://{hotspot_ip}:{ESP32_SERVER_PORT}/client_e32_to_server__smartcam_data_post";')
+        print(f"\n💡 ESP32 Configuration (using ngrok):")
+        print(f'   const char* client_e32__http_post_to_serverhub__smartcam_april_tag_URL = "{ngrok_domain}/client_e32__http_post_to_serverhub__smartcam_april_tag";')
+        print(f'   const char* client_e32__http_post_to_serverhub__smartcam_video_stream_URL = "{ngrok_domain}/client_e32__http_post_to_serverhub__smartcam_video_stream";')
     print("=" * 70)
     print("📋 Expected ESP32 JSON Format:")
     print('   {"tag_id": 5, "camera_name": "OV2640", "timestamp": 1234567890}')
     print("=" * 70)
     print("🚀 Ready to receive ESP32 SmartCam AprilTag data!")
+    print("   - Make sure ngrok is running: ngrok http 5000")
     print("   - Make sure ESP32 is connected to WiFi")
-    print("   - ESP32 should POST to /client_e32_to_server__smartcam_data_post endpoint")
-    print("   - GDevelop should GET from /client_gdevelop_to_server__smartcam_data_get endpoint")
-    print("   - View real-time data at web interface")
+    print("   - ESP32 POSTs to ngrok HTTPS endpoints (see PUBLIC URLs above)")
+    print("   - GDevelop GETs from ngrok HTTPS endpoint")
+    print("   - View local web interface at http://localhost:5000/")
     if "5GHz" in wifi_band:
         print("   ⚠️  WARNING: Ubuntu on 5GHz! ESP32 needs 2.4GHz network!")
     print("=" * 70)
