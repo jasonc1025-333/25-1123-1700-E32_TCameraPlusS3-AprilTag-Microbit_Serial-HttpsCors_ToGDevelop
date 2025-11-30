@@ -637,6 +637,14 @@
           "identifier": "https://asset-resources.gdevelop.io/public-resources/Settings UI/Toggle Switch/f1fe4aaaa4d6da59e2bf6b9411de1f013b5d86c5cacda01f99226c78f427f606_Small Plastic Green Round Toggle_On.png",
           "name": "Small Plastic Green Round Toggle_On.png"
         }
+      },
+      {
+        "file": "2025-11-30_02-23-32-Rq100-TopDown_OnShape.png",
+        "kind": "image",
+        "metadata": "{\"localFilePath\":\"2025-11-30_02-23-32-Rq100-TopDown_OnShape.png\",\"extension\":\".png\"}",
+        "name": "2025-11-30_02-23-32-Rq100-TopDown_OnShape.png",
+        "smoothed": true,
+        "userAdded": false
       }
     ]
   },
@@ -1406,11 +1414,11 @@
           "height": 2048,
           "layer": "",
           "name": "Top_Down_Terrain_64x64",
-          "opacity": 191,
+          "opacity": 153,
           "persistentUuid": "8064324d-c72a-4ff6-9c0d-60dbb8d868f3",
           "width": 4096,
-          "x": -1589,
-          "y": -709,
+          "x": -1579,
+          "y": -720,
           "zOrder": 1,
           "numberProperties": [],
           "stringProperties": [
@@ -1599,6 +1607,7 @@
           "height": 34,
           "layer": "UI Layer",
           "name": "PowerShield_OrangeFlatBar_01",
+          "opacity": 191,
           "persistentUuid": "8d9294cd-3960-4dd1-a539-f16e6a06972e",
           "width": 150,
           "x": 1017,
@@ -1615,6 +1624,7 @@
           "height": 34,
           "layer": "UI Layer",
           "name": "PowerShield_OrangeFlatBar_02",
+          "opacity": 191,
           "persistentUuid": "d09e0d5e-a2a8-478d-af80-18890bf2efe8",
           "width": 150,
           "x": 1108,
@@ -1631,6 +1641,7 @@
           "height": 34,
           "layer": "UI Layer",
           "name": "PowerShield_OrangeFlatBar_03",
+          "opacity": 191,
           "persistentUuid": "0517301a-4b9f-43eb-b8f6-bbcaf6a73baf",
           "width": 150,
           "x": 1012,
@@ -1647,29 +1658,12 @@
           "height": 34,
           "layer": "UI Layer",
           "name": "PowerShield_OrangeFlatBar_04",
+          "opacity": 191,
           "persistentUuid": "546d439a-b8bb-404e-ba63-ea3ff5abec8c",
           "width": 150,
           "x": 918,
           "y": 151,
           "zOrder": 15,
-          "numberProperties": [],
-          "stringProperties": [],
-          "initialVariables": []
-        },
-        {
-          "angle": 270,
-          "customSize": true,
-          "depth": 117,
-          "height": 50,
-          "keepRatio": true,
-          "layer": "UI Layer",
-          "name": "_23_0130_1720_RQ100_SpikePrime_OwenGervais_Assembly__25_1125_0640_Onshape_CoarseVsFine_Gltf__GltfDotReport_v1_Export_AAA_Less15mb_glb__3DModel__Z_65pix",
-          "persistentUuid": "f57ffec7-24ee-425e-914b-31b6b28ea125",
-          "width": 117,
-          "x": 1045,
-          "y": 165,
-          "z": 100,
-          "zOrder": 22,
           "numberProperties": [],
           "stringProperties": [],
           "initialVariables": []
@@ -1682,6 +1676,7 @@
           "keepRatio": true,
           "layer": "UI Layer",
           "name": "TinyGreenButton_01",
+          "opacity": 191,
           "persistentUuid": "8137ed3a-2352-410d-b5c1-4b48e2cf9172",
           "width": 110,
           "x": 1038,
@@ -1699,6 +1694,7 @@
           "keepRatio": true,
           "layer": "UI Layer",
           "name": "TinyGreenButton_02",
+          "opacity": 191,
           "persistentUuid": "4e1d931c-9b22-4789-b3c7-64f9f664864e",
           "width": 110,
           "x": 1172,
@@ -1716,6 +1712,7 @@
           "keepRatio": true,
           "layer": "UI Layer",
           "name": "TinyGreenButton_03",
+          "opacity": 191,
           "persistentUuid": "a4613da3-f04c-4119-954f-89794c910b29",
           "width": 110,
           "x": 1036,
@@ -1733,11 +1730,29 @@
           "keepRatio": true,
           "layer": "UI Layer",
           "name": "TinyGreenButton_04",
+          "opacity": 191,
           "persistentUuid": "a1714cb9-fd45-446a-95ac-b4981d19e431",
           "width": 110,
           "x": 897,
           "y": 148,
           "zOrder": 26,
+          "numberProperties": [],
+          "stringProperties": [],
+          "initialVariables": []
+        },
+        {
+          "angle": 270,
+          "customSize": true,
+          "depth": 1,
+          "height": 97,
+          "keepRatio": true,
+          "layer": "UI Layer",
+          "name": "Rq100_TopDown_Sprite",
+          "persistentUuid": "215c63de-981f-4242-9d87-5622e8c4b6e8",
+          "width": 130,
+          "x": 1024,
+          "y": 114,
+          "zOrder": 27,
           "numberProperties": [],
           "stringProperties": [],
           "initialVariables": []
@@ -3667,6 +3682,67 @@
           "effects": [],
           "behaviors": [],
           "content": {}
+        },
+        {
+          "adaptCollisionMaskAutomatically": true,
+          "assetStoreId": "",
+          "name": "Rq100_TopDown_Sprite",
+          "type": "Sprite",
+          "updateIfNotVisible": false,
+          "variables": [],
+          "effects": [],
+          "behaviors": [],
+          "animations": [
+            {
+              "name": "2025-11-30_02-23-32-Rq100-TopDown_OnShape",
+              "useMultipleDirections": false,
+              "directions": [
+                {
+                  "looping": false,
+                  "metadata": "{\"pskl\":{}}",
+                  "timeBetweenFrames": 0.08,
+                  "sprites": [
+                    {
+                      "hasCustomCollisionMask": true,
+                      "image": "2025-11-30_02-23-32-Rq100-TopDown_OnShape.png",
+                      "points": [],
+                      "originPoint": {
+                        "name": "origine",
+                        "x": 0,
+                        "y": 0
+                      },
+                      "centerPoint": {
+                        "automatic": true,
+                        "name": "centre",
+                        "x": 0,
+                        "y": 0
+                      },
+                      "customCollisionMask": [
+                        [
+                          {
+                            "x": 0,
+                            "y": 0
+                          },
+                          {
+                            "x": 3141,
+                            "y": 0
+                          },
+                          {
+                            "x": 3141,
+                            "y": 1659
+                          },
+                          {
+                            "x": 0,
+                            "y": 1659
+                          }
+                        ]
+                      ]
+                    }
+                  ]
+                }
+              ]
+            }
+          ]
         }
       ],
       "objectsFolderStructure": {
@@ -3674,6 +3750,9 @@
         "children": [
           {
             "objectName": "YellowBarrel"
+          },
+          {
+            "objectName": "Rq100_TopDown_Sprite"
           },
           {
             "objectName": "AmmoCrate"
@@ -5207,6 +5286,18 @@
                     "Power_Shield_01_3DBox",
                     "ColorConversion::HueToRgb(Power_Shield_01_3DBox.tint_Hue_START_NUM)"
                   ]
+                },
+                {
+                  "type": {
+                    "value": "PlaySound"
+                  },
+                  "parameters": [
+                    "",
+                    "e167082358085fe9b9662ed593a8c01ce5b80792afb039738be50f3759633c86_Power Up 1.aac",
+                    "",
+                    "50",
+                    ""
+                  ]
                 }
               ]
             },
@@ -5357,6 +5448,18 @@
                     "Power_Shield_02_3DBox",
                     "ColorConversion::HueToRgb(Power_Shield_02_3DBox.tint_Hue_START_NUM)"
                   ]
+                },
+                {
+                  "type": {
+                    "value": "PlaySound"
+                  },
+                  "parameters": [
+                    "",
+                    "e167082358085fe9b9662ed593a8c01ce5b80792afb039738be50f3759633c86_Power Up 1.aac",
+                    "",
+                    "50",
+                    ""
+                  ]
                 }
               ]
             },
@@ -5498,6 +5601,18 @@
                     "Power_Shield_03_3DBox",
                     "ColorConversion::HueToRgb(Power_Shield_03_3DBox.tint_Hue_START_NUM)"
                   ]
+                },
+                {
+                  "type": {
+                    "value": "PlaySound"
+                  },
+                  "parameters": [
+                    "",
+                    "e167082358085fe9b9662ed593a8c01ce5b80792afb039738be50f3759633c86_Power Up 1.aac",
+                    "",
+                    "50",
+                    ""
+                  ]
                 }
               ]
             },
@@ -5613,11 +5728,14 @@
                 },
                 {
                   "type": {
-                    "value": "Scene3D::Cube3DObject::SetTint"
+                    "value": "PlaySound"
                   },
                   "parameters": [
-                    "Power_Shield_04_3DBox",
-                    "ColorConversion::HueToRgb(Power_Shield_04_3DBox.tint_Hue_START_NUM)"
+                    "",
+                    "e167082358085fe9b9662ed593a8c01ce5b80792afb039738be50f3759633c86_Power Up 1.aac",
+                    "",
+                    "50",
+                    ""
                   ]
                 }
               ]
@@ -5638,7 +5756,17 @@
                   ]
                 }
               ],
-              "actions": []
+              "actions": [
+                {
+                  "type": {
+                    "value": "Scene3D::Cube3DObject::SetTint"
+                  },
+                  "parameters": [
+                    "Power_Shield_04_3DBox",
+                    "ColorConversion::HueToRgb(Power_Shield_04_3DBox.tint_Hue_START_NUM)"
+                  ]
+                }
+              ]
             }
           ]
         },
@@ -5665,6 +5793,18 @@
             "textR": 0
           },
           "comment": "* 10 fps polling = 0.1 sec = 100ms | 20fps = 0.05sec = 50ms | 50fps = 0.02sec = 20ms | .05sec seems good balance to not overload network w/ min-fps >> try 0.1sec for now\n* 'Network: Send a request to a web page': Parameter 'Body': Normally Emtpy-Text for 'Get'"
+        },
+        {
+          "type": "BuiltinCommonInstructions::Comment",
+          "color": {
+            "b": 109,
+            "g": 230,
+            "r": 255,
+            "textB": 0,
+            "textG": 0,
+            "textR": 0
+          },
+          "comment": "* 25-1129-1400 Stable, Persistent URL: Paid Ngrok 'Hobby' Plan"
         },
         {
           "type": "BuiltinCommonInstructions::Standard",
@@ -5696,7 +5836,7 @@
                 "value": "SendAsyncRequest"
               },
               "parameters": [
-                "\"https://4f38ca5eff43.ngrok-free.app/client_gdevelop_to_server__smartcam_data_get\"",
+                "\"https://mallard-happy-singularly.ngrok-free.app/client_gdevelop_to_server__smartcam_data_get\"",
                 "\"\"",
                 "\"GET\"",
                 "",
@@ -5711,6 +5851,19 @@
               "type": "BuiltinCommonInstructions::Standard",
               "conditions": [],
               "actions": [
+                {
+                  "type": {
+                    "value": "SendAsyncRequest"
+                  },
+                  "parameters": [
+                    "\"https://4f38ca5eff43.ngrok-free.app/client_gdevelop_to_server__smartcam_data_get\"",
+                    "\"\"",
+                    "\"GET\"",
+                    "",
+                    "ServerRelayHub_BotData_Rx_DataRaw_Text",
+                    "ServerRelayHub_BobData_Rx_Error_Text"
+                  ]
+                },
                 {
                   "type": {
                     "value": "SendAsyncRequest"

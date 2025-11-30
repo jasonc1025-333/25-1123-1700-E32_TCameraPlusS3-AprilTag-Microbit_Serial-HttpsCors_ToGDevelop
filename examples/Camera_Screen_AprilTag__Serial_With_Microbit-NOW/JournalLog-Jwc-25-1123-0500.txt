@@ -63,3 +63,63 @@ jasonc1025@BMax-B1Pro:~/Jwc-25-0514-2300-Bmax_B1Pro-Ubuntu_22/12j-Db/Dropbox/09k
        valid_lft forever preferred_lft forever
     inet6 fe80::6f77:f3e8:6d20:943b/64 scope link noprefixroute 
        valid_lft forever preferred_lft forever
+
+
+25-1130-0130
+
+## Complete Console Output Example
+
+When GDevelop accesses your server, you'll now see:
+
+```javascript
+🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵
+🔵 CORS PREFLIGHT: OPTIONS Request Received
+🔵 Origin: https://games.gdevelop-app.com
+🔵 Purpose: Browser checking if cross-origin request is allowed
+🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵
+🔵 ✅ Added header: Access-Control-Allow-Origin: *
+🔵 ✅ Added header: Access-Control-Allow-Methods: GET, OPTIONS
+🔵 ✅ Added header: Access-Control-Allow-Headers: Content-Type
+🔵 ✅ CORS PREFLIGHT: Response sent with all CORS headers
+🔵 ✅ Browser will now allow actual GET request from GDevelop
+🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵🔵
+
+======================================================================
+📤 GET RESPONSE - Sending Data to GDevelop:
+======================================================================
+{
+  "smartcam_ip": "192.168.x.x",
+  "tag_id": 5,
+  "yaw": 45.0,
+  "pitch": 30.0,
+  ...
+}
+======================================================================
+
+🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢
+🟢 GET RESPONSE: CORS Headers Applied
+🟢 ✅ Access-Control-Allow-Origin: *
+🟢 ✅ Access-Control-Allow-Methods: GET, OPTIONS
+🟢 ✅ Access-Control-Allow-Headers: Content-Type
+🟢 ✅ Content-Type: application/json
+🟢 ✅ Response ready to send to GDevelop with all CORS headers
+🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢🟢
+```
+
+## Color-Coded Debug System
+
+- __🔵 Blue__ = OPTIONS preflight (CORS check before GET)
+- __🟢 Green__ = GET response (actual data with CORS headers)
+- __📥 Red equals__ = POST from ESP32 (AprilTag data received)
+- __📤 Red equals__ = GET response data (JSON being sent)
+
+## Summary
+
+Your system now has:
+
+- ✅ ESP32 configured for ngrok public access
+- ✅ Python server with comprehensive CORS debugging
+- ✅ Visual distinction between OPTIONS and GET responses
+- ✅ Complete header visibility for troubleshooting
+
+You can now see exactly when and how CORS headers are applied to both the preflight OPTIONS request and the actual GET response!

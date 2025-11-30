@@ -163,6 +163,8 @@
 //// jwc 25-1126-2200 OPTION 1: ESP32 POSTs to Python Server (ACTIVE)
 #include <WiFi.h>
 #include <HTTPClient.h>
+//// jwc 25-1130-1100 ARCHIVED: SSL error for HTTP: #include <WiFiClientSecure.h>
+#include <WiFiClient.h>
 
 //// jwc 25-1126-2200 OPTION 2: ESP32 GET Server for direct polling (ARCHIVED)
 //// jwc 25-1126-2200 #include <ESPAsyncWebServer.h>
@@ -324,15 +326,32 @@ bool listTagEvent_Remove(tagData_Struct* out_tag) {
 //// jwc 25-1126-2300 HTTP POST Endpoint Configuration
 // Server URL for real-time AprilTag data transmission
 //
+//// jwc 25-1130-0220 RENAMED: Clearer naming convention
+//// jwc OLD: TEST_SERVER_URL
+//// jwc NEW: client_e32__http_post_to_serverhub__smartcam_april_tag_URL
 //// jwc 25-1120-0910 HTTP Server Configuration - matching TestServer
-//// jwc 25-1122-0930 y const char* TEST_SERVER_URL = "http://10.0.0.150:5000/client_e32_to_server__smartcam_data_post";
-//// jwc 25-1123-0400 y const char* TEST_SERVER_URL = "http://172.19.216.7:5000/client_e32_to_server__smartcam_data_post";
-//// jwc 25-1124-1410 y const char* TEST_SERVER_URL = "http://10.42.0.1:5000/client_e32_to_server__smartcam_data_post";
-const char* TEST_SERVER_URL = "http://10.0.0.149:5000/client_e32_to_server__smartcam_data_post";
+//// jwc 25-1122-0930 y const char* client_e32__http_post_to_serverhub__smartcam_april_tag_URL = "http://10.0.0.150:5000/client_e32_to_server__smartcam_data_post";
+//// jwc 25-1123-0400 y const char* client_e32__http_post_to_serverhub__smartcam_april_tag_URL = "http://172.19.216.7:5000/client_e32_to_server__smartcam_data_post";
+//// jwc 25-1124-1410 y const char* client_e32__http_post_to_serverhub__smartcam_april_tag_URL = "http://10.42.0.1:5000/client_e32_to_server__smartcam_data_post";
+//// jwc 25-1130-1048 NGROK (HTTPS) - ARCHIVED 25-1130-1058: SSL error -29312 persists: const char* client_e32__http_post_to_serverhub__smartcam_april_tag_URL = "https://mallard-happy-singularly.ngrok-free.app/client_e32__http_post_to_serverhub__smartcam_april_tag";
+//// jwc 25-1130-0842 CLOUDFLARE TUNNEL - ARCHIVED 25-1130-1048: const char* client_e32__http_post_to_serverhub__smartcam_april_tag_URL = "https://instrumentation-intensive-lou-specializing.trycloudflare.com/client_e32__http_post_to_serverhub__smartcam_april_tag";
+//// jwc 25-1130-1058 ✅ LOCAL HTTP (Ubuntu LAN) - ACTIVE - Most reliable, no SSL issues
+//// jwc 25-1130-1058 IMPORTANT: Update this IP to match your Ubuntu server's local IP
+//// jwc 25-1130-1058 Run 'ip addr' on Ubuntu to find correct IP (look for wlp1s0 or enp2s0)
+const char* client_e32__http_post_to_serverhub__smartcam_april_tag_URL = "http://10.0.0.149:5000/client_e32__http_post_to_serverhub__smartcam_april_tag";
+
+
 
 //// jwc 25-1128-0100 VIDEO STREAMING - Optimized to prevent lag
 // Video frame upload endpoint for human viewing
-const char* VIDEO_FRAME_UPLOAD_URL = "http://10.0.0.149:5000/video_frame_upload";
+//// jwc 25-1130-0220 RENAMED: Clearer naming convention
+//// jwc OLD: VIDEO_FRAME_UPLOAD_URL
+//// jwc NEW: client_e32__http_post_to_serverhub__smartcam_video_stream_URL
+//// jwc 25-1130-1048 NGROK (HTTPS) - ARCHIVED 25-1130-1058: SSL error -29312 persists: const char* client_e32__http_post_to_serverhub__smartcam_video_stream_URL = "https://mallard-happy-singularly.ngrok-free.app/client_e32__http_post_to_serverhub__smartcam_video_stream";
+//// jwc 25-1130-0842 CLOUDFLARE TUNNEL - ARCHIVED 25-1130-1048: const char* client_e32__http_post_to_serverhub__smartcam_video_stream_URL = "https://instrumentation-intensive-lou-specializing.trycloudflare.com/client_e32__http_post_to_serverhub__smartcam_video_stream";
+//// jwc 25-1130-1058 ✅ LOCAL HTTP (Ubuntu LAN) - ACTIVE - Most reliable, no SSL issues
+const char* client_e32__http_post_to_serverhub__smartcam_video_stream_URL = "http://10.0.0.149:5000/client_e32__http_post_to_serverhub__smartcam_video_stream";
+
 
 // Video streaming timing control - Optimized settings
 unsigned long video_send_time_last = 0;
@@ -466,7 +485,7 @@ void initWiFi() {
     if (WiFi.status() == WL_CONNECTED) {
         wifi_connected = true;
         printf("\n*** WiFi Connected! SmartCam-IP: %s\n", WiFi.localIP().toString().c_str());
-        printf("*** POST Server: %s\n", TEST_SERVER_URL);
+        printf("*** POST Server: %s\n", client_e32__http_post_to_serverhub__smartcam_april_tag_URL);
         
         //// jwc 25-1126-2200 OPTION 2: GET Server (ARCHIVED)
         //// jwc 25-1126-2200 // Setup HTTP GET endpoint for GDevelop to poll
@@ -539,16 +558,44 @@ bool sendVideoFrame(camera_fb_t *fb) {
     
     printf("\n>>> VIDEO: Sending frame (Size: %d bytes, Quality: %d)...\n", jpg_buf_len, VIDEO_JPEG_QUALITY);
     
+    //// jwc 25-1130-0400 OLD METHOD (SSL error -29312 with HTTPS):
+    //// jwc 25-1130-0400 HTTPClient http;
+    //// jwc 25-1130-0400 http.begin(client_e32__http_post_to_serverhub__smartcam_video_stream_URL);
+    //// jwc 25-1130-0400 http.addHeader("Content-Type", "image/jpeg");
+    
+    //// jwc 25-1130-0410 ARCHIVED: WiFiClientSecure for HTTPS - caused SSL error with HTTP:
+    //// jwc 25-1130-0410 WiFiClientSecure *client = new WiFiClientSecure;
+    //// jwc 25-1130-0410 if (!client) {
+    //// jwc 25-1130-0410     printf(">>> VIDEO ERROR: Failed to allocate WiFiClientSecure\n");
+    //// jwc 25-1130-0410     if (jpg_converted && jpg_buf) {
+    //// jwc 25-1130-0410         free(jpg_buf);
+    //// jwc 25-1130-0410     }
+    //// jwc 25-1130-0410     return false;
+    //// jwc 25-1130-0410 }
+    //// jwc 25-1130-0410 client->setInsecure();  // Skip SSL certificate verification for HTTPS (ngrok)
+    
+    //// jwc 25-1130-1100 Use WiFiClient for HTTP (not HTTPS):
+    WiFiClient *client = new WiFiClient;
+    if (!client) {
+        printf(">>> VIDEO ERROR: Failed to allocate WiFiClient\n");
+        if (jpg_converted && jpg_buf) {
+            free(jpg_buf);
+        }
+        return false;
+    }
+    
     HTTPClient http;
-    http.begin(VIDEO_FRAME_UPLOAD_URL);
+    http.begin(*client, client_e32__http_post_to_serverhub__smartcam_video_stream_URL);
     http.addHeader("Content-Type", "image/jpeg");
     http.setTimeout(1500);  // 1.5 second timeout - fail fast to avoid blocking
     
     int httpResponseCode = http.POST(jpg_buf, jpg_buf_len);
     
+    http.end();  // End HTTP connection first
+    delete client;  // Clean up WiFiClient
+    
     if (httpResponseCode > 0) {
         printf(">>> VIDEO SUCCESS: Frame uploaded (Code: %d)\n", httpResponseCode);
-        http.end();
         
         // Free converted JPEG buffer if we allocated it
         if (jpg_converted && jpg_buf) {
@@ -557,7 +604,6 @@ bool sendVideoFrame(camera_fb_t *fb) {
         return true;
     } else {
         printf(">>> VIDEO FAILURE: Upload failed (Code: %d)\n", httpResponseCode);
-        http.end();
         
         // Free converted JPEG buffer if we allocated it
         if (jpg_converted && jpg_buf) {
@@ -583,11 +629,31 @@ bool sendAprilTagData(int tag_id, const char* camera_name, float yaw, float pitc
     unsigned long latency_start_ms = millis();
     
     printf("\nvvv HTTP POST START vvv\n");
-    printf("*** HTTP: Target URL: %s\n", TEST_SERVER_URL);
+    printf("*** HTTP: Target URL: %s\n", client_e32__http_post_to_serverhub__smartcam_april_tag_URL);
     printf("*** HTTP: Tag ID: %d, Camera: %s\n", tag_id, camera_name);
     
+    //// jwc 25-1130-0400 OLD METHOD (SSL error -29312 with HTTPS):
+    //// jwc 25-1130-0400 HTTPClient http;
+    //// jwc 25-1130-0400 http.begin(client_e32__http_post_to_serverhub__smartcam_april_tag_URL);
+    //// jwc 25-1130-0400 http.addHeader("Content-Type", "application/json");
+    
+    //// jwc 25-1130-0410 ARCHIVED: WiFiClientSecure for HTTPS - caused SSL error with HTTP:
+    //// jwc 25-1130-0410 WiFiClientSecure *client = new WiFiClientSecure;
+    //// jwc 25-1130-0410 if (!client) {
+    //// jwc 25-1130-0410     printf("*** HTTP ERROR: Failed to allocate WiFiClientSecure\n");
+    //// jwc 25-1130-0410     return false;
+    //// jwc 25-1130-0410 }
+    //// jwc 25-1130-0410 client->setInsecure();  // Skip SSL certificate verification for HTTPS (ngrok)
+    
+    //// jwc 25-1130-1100 Use WiFiClient for HTTP (not HTTPS):
+    WiFiClient *client = new WiFiClient;
+    if (!client) {
+        printf("*** HTTP ERROR: Failed to allocate WiFiClient\n");
+        return false;
+    }
+    
     HTTPClient http;
-    http.begin(TEST_SERVER_URL);
+    http.begin(*client, client_e32__http_post_to_serverhub__smartcam_april_tag_URL);
     http.addHeader("Content-Type", "application/json");
     http.addHeader("Access-Control-Allow-Origin", "*");
     http.addHeader("Access-Control-Allow-Methods", "POST, GET, OPTIONS");
@@ -640,12 +706,13 @@ bool sendAprilTagData(int tag_id, const char* camera_name, float yaw, float pitc
         gfx->setCursor(180, 1);
         gfx->printf("HTTP:%lums", latency_ms);
         
-        http.end();
+        http.end();  // End HTTP connection first
+        delete client;  // Clean up WiFiClient
         return true;
     } else {
         printf("*** HTTP FAILURE: Error Code: %d\n", httpResponseCode);
         printf("*** HTTP FAILURE: Possible causes:\n");
-        printf("    - Server not running on %s\n", TEST_SERVER_URL);
+        printf("    - Server not running on %s\n", client_e32__http_post_to_serverhub__smartcam_april_tag_URL);
         printf("    - Network connectivity issues\n");
         printf("    - Firewall blocking port 5000\n");
         printf("^^^ HTTP POST END (FAILED) ^^^\n\n");
@@ -655,7 +722,8 @@ bool sendAprilTagData(int tag_id, const char* camera_name, float yaw, float pitc
         gfx->setCursor(200, 1);
         gfx->printf("HTTP:ERR");
         
-        http.end();
+        http.end();  // End HTTP connection first
+        delete client;  // Clean up WiFiClient
         return false;
     }
 }
