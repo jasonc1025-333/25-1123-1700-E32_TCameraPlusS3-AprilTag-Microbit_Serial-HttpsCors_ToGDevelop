@@ -677,7 +677,7 @@
         "gridColor": 10401023,
         "gridAlpha": 0.8,
         "snap": false,
-        "zoomFactor": 0.7370816317994066,
+        "zoomFactor": 0.9934433498259623,
         "windowMask": false,
         "selectedLayer": ""
       },
@@ -1251,8 +1251,8 @@
           "name": "PacMan_Object",
           "persistentUuid": "0dc76a01-512a-43be-8235-46a7458e424d",
           "width": 128,
-          "x": 47,
-          "y": 586,
+          "x": 16,
+          "y": 456,
           "zOrder": 7,
           "numberProperties": [],
           "stringProperties": [],
@@ -1753,6 +1753,22 @@
           "x": 1024,
           "y": 114,
           "zOrder": 27,
+          "numberProperties": [],
+          "stringProperties": [],
+          "initialVariables": []
+        },
+        {
+          "angle": 0,
+          "customSize": false,
+          "height": 0,
+          "keepRatio": true,
+          "layer": "",
+          "name": "VersionNum_Text",
+          "persistentUuid": "b2b6d682-da25-486f-b045-ad1d3c897d34",
+          "width": 0,
+          "x": 38,
+          "y": 658,
+          "zOrder": 28,
           "numberProperties": [],
           "stringProperties": [],
           "initialVariables": []
@@ -3743,6 +3759,49 @@
               ]
             }
           ]
+        },
+        {
+          "assetStoreId": "",
+          "bold": false,
+          "italic": false,
+          "name": "VersionNum_Text",
+          "smoothed": true,
+          "type": "TextObject::Text",
+          "underlined": false,
+          "variables": [],
+          "effects": [],
+          "behaviors": [],
+          "string": "Ver: 25-1130-2100",
+          "font": "",
+          "textAlignment": "left",
+          "characterSize": 20,
+          "color": {
+            "b": 0,
+            "g": 0,
+            "r": 0
+          },
+          "content": {
+            "bold": false,
+            "isOutlineEnabled": false,
+            "isShadowEnabled": false,
+            "italic": false,
+            "outlineColor": "255;255;255",
+            "outlineThickness": 2,
+            "shadowAngle": 90,
+            "shadowBlurRadius": 2,
+            "shadowColor": "0;0;0",
+            "shadowDistance": 4,
+            "shadowOpacity": 127,
+            "smoothed": true,
+            "underlined": false,
+            "text": "Ver: 25-1130-2100",
+            "font": "",
+            "textAlignment": "left",
+            "verticalTextAlignment": "top",
+            "characterSize": 20,
+            "lineHeight": 0,
+            "color": "0;0;0"
+          }
         }
       ],
       "objectsFolderStructure": {
@@ -3813,6 +3872,9 @@
           },
           {
             "objectName": "Top_Down_Terrain_64x64"
+          },
+          {
+            "objectName": "VersionNum_Text"
           },
           {
             "objectName": "Boundary_Wall_Sprite"
