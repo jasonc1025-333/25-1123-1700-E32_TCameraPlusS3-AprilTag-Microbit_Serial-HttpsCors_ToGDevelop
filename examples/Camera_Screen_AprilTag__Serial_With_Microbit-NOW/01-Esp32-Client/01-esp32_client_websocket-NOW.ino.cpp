@@ -78,7 +78,14 @@ const char* AUTH_TOKEN = "Jesus333!!!";
 //// jwc 25-1202-0250 Fixed IP: Server actual IP is 10.0.0.149 (was using wrong IP 10.0.0.26)
 //// jwc 25-1202-0845 Local works perfectly: no SSL complexity, lower latency, stable
 //// jwc 25-1202-0910 Final choice: Option A most reliable after testing all options
-const char* WS_HOST = "10.0.0.149";
+
+// * Local Ip (LAN)
+//// jwc 25-1202-1200 y const char* WS_HOST = "10.0.0.149";
+
+// * Public Ip: Port-Forard: TCP for WebSocket
+const char* WS_HOST = "76.102.42.17";
+
+
 const uint16_t WS_PORT = 5000;
 const char* WS_PATH = "/websocket";
 const bool WS_USE_SSL = false;  // false = ws://, true = wss://
