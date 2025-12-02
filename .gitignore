@@ -7,3 +7,8 @@
 *.json.autosave
 *.JSO.autosave
 99Z-ARCHIVE-BAD/*
+
+### venv/
+venv/
+examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW/02-Ubuntu-Server_Hub/venv/
+
