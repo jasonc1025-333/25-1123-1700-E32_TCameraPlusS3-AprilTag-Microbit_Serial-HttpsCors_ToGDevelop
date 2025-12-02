@@ -1,4 +1,7 @@
 
+IMPORTANT NOTES
+* examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW
+
 25-1202-0600
 ## How Others Use Your Code:
 
