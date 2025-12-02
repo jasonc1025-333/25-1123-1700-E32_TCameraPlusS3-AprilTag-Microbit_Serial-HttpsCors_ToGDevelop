@@ -525,7 +525,7 @@ void initWiFi() {
     }
 }
 
-//// jwc 25-1128-0100 VIDEO STREAMING - Send JPEG frame to server (Optimized)
+//// jwc 25-1201-1330 VIDEO STREAMING - Send JPEG frame to server (Fixed timeout & error handling)
 bool sendVideoFrame(camera_fb_t *fb) {
     // Check WiFi connection status
     if (!wifi_connected || WiFi.status() != WL_CONNECTED) {
@@ -585,13 +585,16 @@ bool sendVideoFrame(camera_fb_t *fb) {
     }
     
     HTTPClient http;
-    http.begin(*client, client_e32__http_post_to_serverhub__smartcam_video_stream_URL);
+    
+    //// jwc 25-1201-1330 IMPORTANT FIX: Use begin() without client parameter for HTTP
+    //// This fixes connection refused errors with local HTTP servers
+    http.begin(client_e32__http_post_to_serverhub__smartcam_video_stream_URL);
     http.addHeader("Content-Type", "image/jpeg");
-    http.setTimeout(1500);  // 1.5 second timeout - fail fast to avoid blocking
+    http.setTimeout(5000);  // 5 second timeout - longer for video uploads
     
     int httpResponseCode = http.POST(jpg_buf, jpg_buf_len);
     
-    http.end();  // End HTTP connection first
+    http.end();  // End HTTP connection
     delete client;  // Clean up WiFiClient
     
     if (httpResponseCode > 0) {
@@ -603,7 +606,14 @@ bool sendVideoFrame(camera_fb_t *fb) {
         }
         return true;
     } else {
+        // Detailed error messages for common codes
         printf(">>> VIDEO FAILURE: Upload failed (Code: %d)\n", httpResponseCode);
+        if (httpResponseCode == -1) {
+            printf("    - Error -1: Connection refused. Server may not be running or endpoint missing.\n");
+            printf("    - Check server URL: %s\n", client_e32__http_post_to_serverhub__smartcam_video_stream_URL);
+        } else if (httpResponseCode == -11) {
+            printf("    - Error -11: Timeout. Server not responding or network slow.\n");
+        }
         
         // Free converted JPEG buffer if we allocated it
         if (jpg_converted && jpg_buf) {
