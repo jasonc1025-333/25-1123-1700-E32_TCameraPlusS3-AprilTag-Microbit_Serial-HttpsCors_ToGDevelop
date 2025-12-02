@@ -37,6 +37,18 @@ SERVER_PORT = 5000
 SERVER_HOST = '0.0.0.0'
 
 # ============================================================================
+# SECURITY CONFIGURATION
+# ============================================================================
+# Authentication token - MUST MATCH ESP32's AUTH_TOKEN
+# Generate new token: python3 -c "import secrets; print(secrets.token_urlsafe(32))"
+#### jwc 25-1202-1120 o AUTH_TOKEN = "your_secret_token_change_this_12345"  # TODO: Change this!
+AUTH_TOKEN = "Jesus333!!!"  # jwc 25-1202-1120 Matches ESP32
+
+# WARNING: This token protects against unauthorized access, but data is still
+# transmitted in plain text over ws://. For production, use VPN or wss://
+# SECURITY NOTE: Change this to a unique random token for production!
+
+# ============================================================================
 # DATA STRUCTURES
 # ============================================================================
 
@@ -114,6 +126,26 @@ CORS(app, origins="*", supports_credentials=True)
 sock = Sock(app)  # Initialize flask-sock
 
 # ============================================================================
+# SECURITY FUNCTIONS
+# ============================================================================
+
+def validate_auth_token(data):
+    """
+    Validate authentication token from client
+    
+    Returns: (is_valid, error_message)
+    """
+    token = data.get('data', {}).get('auth_token', '')
+    
+    if not token:
+        return (False, 'Missing auth_token')
+    
+    if token != AUTH_TOKEN:
+        return (False, 'Invalid auth_token')
+    
+    return (True, '')
+
+# ============================================================================
 # WEBSOCKET HANDLERS
 # ============================================================================
 
@@ -144,13 +176,24 @@ def handle_esp32_message(ws, message):
         event = data.get('event', '')
         
         if event == 'identify':
-            # ESP32 identifying itself
+            # ESP32 identifying itself - validate auth token
+            is_valid, error_msg = validate_auth_token(data)
+            
+            if not is_valid:
+                print(f"❌ ESP32 AUTH FAILED: {error_msg}")
+                ws.send(json.dumps({
+                    'event': 'auth_failed',
+                    'error': error_msg,
+                    'message': 'Authentication required - check your auth_token'
+                }))
+                return  # Don't add to clients list
+            
             with websocket_lock:
                 if ws not in websocket_clients['esp32']:
                     websocket_clients['esp32'].append(ws)
                     stats['esp32_connected'] = True
             
-            print(f"📹 ESP32 IDENTIFIED")
+            print(f"📹 ESP32 IDENTIFIED ✅ (Authenticated)")
             ws.send(json.dumps({'event': 'identify_success', 'client_type': 'esp32'}))
             
         elif event == 'apriltag_data':
