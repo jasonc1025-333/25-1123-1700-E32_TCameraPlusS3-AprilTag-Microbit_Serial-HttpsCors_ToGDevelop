@@ -32,6 +32,22 @@
        # When done, deactivate
        deactivate
 
+              * examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW
+
+              25-1202-0600
+              ## How Others Use Your Code:
+
+              ```bash
+              # They clone your repo
+              git clone your-repo
+
+              # They create THEIR OWN venv
+              python3 -m venv venv
+              source venv/bin/activate
+
+              # They install from YOUR requirements.txt
+              pip install -r requirements.txt
+
 ```bash
 cd 11i-GDevelop_Sim/
 pip install -r requirements.txt
