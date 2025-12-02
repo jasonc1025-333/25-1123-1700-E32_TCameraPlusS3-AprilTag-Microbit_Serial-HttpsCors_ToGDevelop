@@ -44,6 +44,17 @@ const char* WIFI_SSID = "Chan-Comcast";
 const char* WIFI_PASSWORD = "Jesus333!";
 
 // ============================================================================
+// Security Configuration
+// ============================================================================
+// Authentication token - MUST MATCH server's AUTH_TOKEN
+// Change this to match your Python server's AUTH_TOKEN
+//// jwc 25-1202-1120 const char* AUTH_TOKEN = "your_secret_token_change_this_12345";
+const char* AUTH_TOKEN = "Jesus333!!!";
+
+// IMPORTANT: This token will be sent in plain text over ws://
+// For production, use VPN or wss:// to encrypt the connection
+
+// ============================================================================
 // WebSocket Server Configuration
 // ============================================================================
 //
@@ -147,19 +158,20 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             Serial.println(createSeparator('=', 70));
             webSocketConnected = true;
             
-            // Identify as ESP32 to server
-            StaticJsonDocument<128> identifyDoc;
+            // Identify as ESP32 to server (with authentication token)
+            StaticJsonDocument<256> identifyDoc;
             identifyDoc["event"] = "identify";
             JsonObject identifyData = identifyDoc.createNestedObject("data");
             identifyData["type"] = "esp32";
             identifyData["device"] = "T-CameraPlus-S3";
             identifyData["version"] = "2.0.1";
+            identifyData["auth_token"] = AUTH_TOKEN;  // Authentication token
             
             String identifyJson;
             serializeJson(identifyDoc, identifyJson);
             webSocket.sendTXT(identifyJson);
             
-            Serial.println("📨 Sent identification to server");
+            Serial.println("📨 Sent identification to server (with auth token)");
             break;
         }
             
