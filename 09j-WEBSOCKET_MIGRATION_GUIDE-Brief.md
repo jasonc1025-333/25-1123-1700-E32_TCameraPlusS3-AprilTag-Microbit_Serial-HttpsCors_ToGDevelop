@@ -209,3 +209,97 @@ You've succeeded when:
 ---
 
 **Questions?** Check the full migration guide: `WEBSOCKET_MIGRATION_GUIDE.md`
+
+25-1202-1150
+# ✅ Authentication Token Implementation Complete!
+
+       ## 🎯 What Was Accomplished:
+
+
+       ### 1. __Fixed Original Port 5000 Conflict__
+
+
+       - Server now properly handles port conflicts
+       - Can identify and manage running processes
+
+
+       ### 2. __Added Authentication Token Security__ 🔒
+
+
+       - ✅ ESP32 Client: Sends auth token in identify message
+       - ✅ Python Server: Validates token before accepting connection
+       - ✅ Both tokens matched: `"Jesus333!!!"`
+
+
+       ### 3. __Implementation Details:__
+
+
+       __ESP32 Client (`01-esp32_client_websocket-NOW.ino.cpp`):__
+
+
+       ```cpp
+       // Authentication token (line ~50)
+       const char* AUTH_TOKEN = "Jesus333!!!";
+
+
+       // Sent during connection (line ~169)
+       identifyData["auth_token"] = AUTH_TOKEN;
+       ```
+
+
+       __Python Server (`02-ubuntu_server_websocket-NOW.py`):__
+
+
+       ```python
+       # Authentication token (line ~44)
+       AUTH_TOKEN = "Jesus333!!!"
+
+
+       // Validation function (line ~143)
+       def validate_auth_token(data):
+       token = data.get('data', {}).get('auth_token', '')
+       if not token:
+              return (False, 'Missing auth_token')
+       if token != AUTH_TOKEN:
+              return (False, 'Invalid auth_token')
+       return (True, '')
+
+
+       # Validated during ESP32 identify (line ~185)
+       is_valid, error_msg = validate_auth_token(data)
+       if not is_valid:
+       # Connection rejected!
+
+
+
+
+25-1202-1200
+* https://whatismyipaddress.com/
+       * 76.102.42.17
+              * Service Name: WebSocket Server
+                     (or any name you prefer: ESP32_Server, Python_WS, etc.)
+
+                     Service Type: TCP/UDP
+                     (Select "TCP" or "Both" - WebSocket uses TCP)
+
+                     Start Port: 5000
+                     End Port: 5000
+
+                     Server IPv4 Address: 10.0.0.149
+                     (Your Ubuntu server's local IP)
+
+                     □ Enable/Active: ✅ CHECKED
+       * 
+       __Edit ESP32 code to use public IP:__
+
+              ```cpp
+              // For REMOTE access (from anywhere):
+              const char* WS_HOST = "73.45.189.234";  // Your public IP
+              const uint16_t WS_PORT = 5000;
+              const bool WS_USE_SSL = false;
+
+              // For LOCAL access (same network):
+              const char* WS_HOST = "10.0.0.149";  // Local IP
+              const uint16_t WS_PORT = 5000;
+              const bool WS_USE_SSL = false;
+              ```
