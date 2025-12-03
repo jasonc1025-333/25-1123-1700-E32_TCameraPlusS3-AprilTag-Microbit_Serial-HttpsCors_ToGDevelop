@@ -99,7 +99,8 @@ websocket_lock = threading.Lock()
 
 # Latest data
 latest_apriltag_data = None
-latest_video_frame = None
+latest_video_frame = None  # Will store (jpeg_bytes, timestamp)
+latest_video_frame_lock = threading.Lock()  # Thread-safe access to video frame
 
 # Legacy FIFO queue (HTTP compatibility)
 tagData_List_Fifo = []
@@ -174,8 +175,8 @@ def broadcast_to_gdevelop(message_dict):
     print(f"🔊 BROADCAST to GDevelop ({len(websocket_clients['gdevelop'])} clients):")
     print(f"   Event: {message_dict.get('event', 'unknown')}")
     if message_dict.get('event') == 'apriltag_data':
-        data = message_dict.get('data', {})
-        print(f"   Data: tag_id={data.get('tag_id')}, x={data.get('x_cm'):.1f}, y={data.get('y_cm'):.1f}, z={data.get('z_cm'):.1f}")
+        # Flat JSON - fields are at top level, not in nested 'data'
+        print(f"   Data: tag_id={message_dict.get('tag_id', 0)}, x={message_dict.get('x_cm', 0):.1f}, y={message_dict.get('y_cm', 0):.1f}, z={message_dict.get('z_cm', 0):.1f}")
     print(f"   Full JSON: {message_json[:200]}..." if len(message_json) > 200 else f"   Full JSON: {message_json}")
     
     with websocket_lock:
@@ -236,7 +237,15 @@ def handle_esp32_message(ws, message):
             
         elif event == 'apriltag_data':
             # Received AprilTag data from ESP32
-            payload = data.get('data', {})
+            # Support both nested (legacy) and flat (new) formats
+            if 'data' in data and isinstance(data['data'], dict):
+                # Legacy nested format: {"event": "apriltag_data", "data": {...}}
+                payload = data['data']
+            else:
+                # New flat format: {"event": "apriltag_data", "tag_id": 5, ...}
+                # Extract all fields except 'event'
+                payload = {k: v for k, v in data.items() if k != 'event'}
+            
             payload['server_timestamp'] = time.time()
             
             # Store as latest
@@ -258,10 +267,10 @@ def handle_esp32_message(ws, message):
             tag_data.timestamp = payload['server_timestamp']
             AprilTag_List_Fifo_Push(tag_data)
             
-            # Broadcast to GDevelop
+            # Broadcast to GDevelop (keep flat format)
             broadcast_message = {
                 'event': 'apriltag_data',
-                'data': payload
+                **payload  # Spread operator - keeps flat structure
             }
             broadcast_to_gdevelop(broadcast_message)
             
@@ -270,6 +279,9 @@ def handle_esp32_message(ws, message):
             print(f"📡 AprilTag → GDevelop ({stats['gdevelop_clients']} clients): "
                   f"ID={payload.get('tag_id')}, "
                   f"Pos=({payload.get('x_cm', 0):.1f}, {payload.get('y_cm', 0):.1f}, {payload.get('z_cm', 0):.1f}) cm")
+            
+            # DEBUG: Print full JSON being sent
+            print(f"📤 FULL JSON to GDevelop: {json.dumps(broadcast_message)}")
             
             # Acknowledge to ESP32
             ack_msg = {'event': 'apriltag_ack', 'status': 'received'}
@@ -316,16 +328,16 @@ def handle_gdevelop_message(ws, message):
             print(f"📤 SEND to GDevelop: {json.dumps(identify_success_msg)}")
             ws.send(json.dumps(identify_success_msg))
             
-            # Send latest data if available
+            # Send latest data if available (FLAT format)
             if latest_apriltag_data:
-                latest_data_msg = {'event': 'apriltag_data', 'data': latest_apriltag_data}
+                latest_data_msg = {'event': 'apriltag_data', **latest_apriltag_data}
                 print(f"📤 SEND to GDevelop (Latest Data): {json.dumps(latest_data_msg)[:200]}...")
                 ws.send(json.dumps(latest_data_msg))
                 
         elif event == 'request_latest_data':
-            # GDevelop requesting latest data
+            # GDevelop requesting latest data (FLAT format)
             if latest_apriltag_data:
-                latest_data_msg = {'event': 'apriltag_data', 'data': latest_apriltag_data}
+                latest_data_msg = {'event': 'apriltag_data', **latest_apriltag_data}
                 print(f"📤 SEND to GDevelop (Requested Data): {json.dumps(latest_data_msg)[:200]}...")
                 ws.send(json.dumps(latest_data_msg))
             else:
@@ -493,6 +505,187 @@ def AprilTag_List_Fifo_Pop():
     
     return tag_data
 
+@app.route('/client_e32__http_post_to_serverhub__smartcam_video_stream', methods=['POST'])
+def receive_video_frame():
+    """Receive and cache video frames from ESP32"""
+    global latest_video_frame
+    
+    try:
+        # Get JPEG data from request
+        jpeg_data = request.get_data()
+        
+        if jpeg_data and len(jpeg_data) > 0:
+            # Store frame with timestamp (thread-safe)
+            with latest_video_frame_lock:
+                latest_video_frame = (jpeg_data, time.time())
+            
+            stats['video_frames'] += 1
+            
+            print(f"📹 Video frame cached: {len(jpeg_data)} bytes (#{stats['video_frames']})")
+            
+            return jsonify({'status': 'success', 'size': len(jpeg_data)}), 200
+        else:
+            return jsonify({'status': 'error', 'message': 'No data received'}), 400
+            
+    except Exception as e:
+        print(f"❌ Error receiving video frame: {e}")
+        return jsonify({'status': 'error', 'message': str(e)}), 500
+
+@app.route('/photo')
+def serve_latest_frame():
+    """Serve the most recent video frame as JPEG"""
+    global latest_video_frame
+    
+    with latest_video_frame_lock:
+        if latest_video_frame is None:
+            # No frame available yet - return placeholder
+            return "No frame available yet. Waiting for ESP32...", 404
+        
+        jpeg_data, timestamp = latest_video_frame
+        age_seconds = time.time() - timestamp
+        
+    # Create response with JPEG data
+    response = make_response(jpeg_data)
+    response.headers['Content-Type'] = 'image/jpeg'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
+    response.headers['X-Frame-Age'] = f'{age_seconds:.1f}s'
+    
+    return response
+
+@app.route('/video')
+def video_viewer():
+    """Live video viewer page with auto-refresh"""
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>ESP32 Camera Viewer</title>
+        <meta charset="utf-8">
+        <style>
+            body {{
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 20px;
+                background: #1a1a1a;
+                color: white;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                min-height: 100vh;
+            }}
+            .container {{
+                max-width: 800px;
+                width: 100%;
+            }}
+            h1 {{
+                text-align: center;
+                color: #4CAF50;
+                margin-bottom: 10px;
+            }}
+            .info {{
+                text-align: center;
+                color: #999;
+                margin-bottom: 20px;
+                font-size: 14px;
+            }}
+            .video-container {{
+                background: #000;
+                border: 3px solid #4CAF50;
+                border-radius: 10px;
+                padding: 10px;
+                box-shadow: 0 0 20px rgba(76, 175, 80, 0.3);
+            }}
+            img {{
+                width: 100%;
+                height: auto;
+                display: block;
+                border-radius: 5px;
+            }}
+            .stats {{
+                margin-top: 20px;
+                padding: 15px;
+                background: #2a2a2a;
+                border-radius: 10px;
+                font-size: 14px;
+            }}
+            .stats-row {{
+                display: flex;
+                justify-content: space-between;
+                margin: 5px 0;
+            }}
+            .status {{
+                display: inline-block;
+                width: 10px;
+                height: 10px;
+                border-radius: 50%;
+                background: #4CAF50;
+                margin-right: 8px;
+                animation: pulse 2s infinite;
+            }}
+            @keyframes pulse {{
+                0%, 100% {{ opacity: 1; }}
+                50% {{ opacity: 0.5; }}
+            }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>📹 ESP32 Camera Live View</h1>
+            <div class="info">
+                <span class="status"></span>
+                Auto-refresh every 2 seconds
+            </div>
+            
+            <div class="video-container">
+                <img src="/photo?t={{{{new Date().getTime()}}}}" 
+                     alt="ESP32 Camera Feed" 
+                     id="cameraFeed"
+                     onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22400%22 height=%22300%22%3E%3Crect fill=%22%23333%22 width=%22400%22 height=%22300%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 text-anchor=%22middle%22 fill=%22%23999%22 font-family=%22Arial%22 font-size=%2220%22%3EWaiting for camera...%3C/text%3E%3C/svg%3E'">
+            </div>
+            
+            <div class="stats">
+                <div class="stats-row">
+                    <strong>🎥 Resolution:</strong>
+                    <span>240x240 pixels</span>
+                </div>
+                <div class="stats-row">
+                    <strong>🔄 Update Rate:</strong>
+                    <span>~0.5 FPS (2 sec interval)</span>
+                </div>
+                <div class="stats-row">
+                    <strong>📡 Server:</strong>
+                    <span>{SERVER_HOST}:{SERVER_PORT}</span>
+                </div>
+                <div class="stats-row">
+                    <strong>⏱️ Latency:</strong>
+                    <span id="latency">Calculating...</span>
+                </div>
+            </div>
+        </div>
+        
+        <script>
+            // Auto-refresh image every 2 seconds
+            setInterval(function() {{
+                var img = document.getElementById('cameraFeed');
+                img.src = '/photo?t=' + new Date().getTime();
+            }}, 2000);
+            
+            // Monitor frame age via response headers
+            fetch('/photo')
+                .then(response => {{
+                    const age = response.headers.get('X-Frame-Age');
+                    if (age) {{
+                        document.getElementById('latency').textContent = age;
+                    }}
+                }});
+        </script>
+    </body>
+    </html>
+    """
+    return html
+
 @app.route('/client_gdevelop_to_server__smartcam_data_get', methods=['GET', 'OPTIONS'])
 def serve_gdevelop_data_http():
     """Legacy HTTP GET endpoint"""
@@ -640,6 +833,10 @@ def print_startup_info():
     print("🌐 HTTP Endpoints:")
     print(f"   http://{local_ip}:{SERVER_PORT}/")
     print(f"      └─ Server status dashboard (auto-refresh)")
+    print(f"   http://{local_ip}:{SERVER_PORT}/video")
+    print(f"      └─ 📹 Live camera video viewer (auto-refresh)")
+    print(f"   http://{local_ip}:{SERVER_PORT}/photo")
+    print(f"      └─ 📷 Latest camera photo (JPEG)")
     print(f"   http://{local_ip}:{SERVER_PORT}/status")
     print(f"      └─ JSON status API")
     print(f"   http://{local_ip}:{SERVER_PORT}/client_gdevelop_to_server__smartcam_data_get")

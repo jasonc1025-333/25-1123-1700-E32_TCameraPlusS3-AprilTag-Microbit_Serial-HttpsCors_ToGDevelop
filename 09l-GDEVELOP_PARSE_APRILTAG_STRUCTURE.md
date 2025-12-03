@@ -213,9 +213,90 @@ Actions:
 
 ---
 
-## 🎯 Alternative: Simpler Approach Without Full Structure
+## 🎯 Alternative 1: Flat/Single-Level Structure Variable
+## 🎯 Alternative 1: Flat/Single-Levteel Structure Variable
 
-If you don't need all fields, you can extract just what you need:
+If you prefer a **single-level structure** (all fields at top level, no nesting), create this structure:
+
+**Create Structure Variable** named `AprilTagFlat`:
+```
+AprilTagFlat (Structure)
+├─ event (String) = ""
+├─ smartcam_ip (String) = ""
+├─ tag_id (Number) = 0
+├─ camera_name (String) = ""
+├─ x_cm (Number) = 0
+├─ y_cm (Number) = 0
+├─ z_cm (Number) = 0
+├─ yaw (Number) = 0
+├─ pitch (Number) = 0
+├─ roll (Number) = 0
+├─ tag_size_percent (Number) = 0
+├─ distance_cm (Number) = 0
+└─ timestamp (Number) = 0
+```
+
+**JavaScript Code to Parse into Flat Structure:**
+
+```javascript
+const message = runtimeScene.getVariables().get("WebSocket_LastMessage").getAsString();
+
+try {
+    const jsonData = JSON.parse(message);
+    
+    if (jsonData.event === "apriltag_data" && jsonData.data) {
+        // Get flat structure variable
+        const flatVar = runtimeScene.getVariables().get("AprilTagFlat");
+        
+        // Store top-level fields
+        flatVar.getChild("event").setString(jsonData.event);
+        
+        // Flatten the nested 'data' object into top-level fields
+        flatVar.getChild("smartcam_ip").setString(jsonData.data.smartcam_ip || "");
+        flatVar.getChild("tag_id").setNumber(jsonData.data.tag_id || 0);
+        flatVar.getChild("camera_name").setString(jsonData.data.camera_name || "");
+        flatVar.getChild("x_cm").setNumber(jsonData.data.x_cm || 0);
+        flatVar.getChild("y_cm").setNumber(jsonData.data.y_cm || 0);
+        flatVar.getChild("z_cm").setNumber(jsonData.data.z_cm || 0);
+        flatVar.getChild("yaw").setNumber(jsonData.data.yaw || 0);
+        flatVar.getChild("pitch").setNumber(jsonData.data.pitch || 0);
+        flatVar.getChild("roll").setNumber(jsonData.data.roll || 0);
+        flatVar.getChild("tag_size_percent").setNumber(jsonData.data.tag_size_percent || 0);
+        flatVar.getChild("distance_cm").setNumber(jsonData.data.distance_cm || 0);
+        flatVar.getChild("timestamp").setNumber(jsonData.data.timestamp || 0);
+        
+        console.log("✅ Stored in flat structure:", {
+            tag_id: jsonData.data.tag_id,
+            position: [jsonData.data.x, jsonData.data.y_cm, jsonData.data.z_cm]
+        });
+    } else {
+        console.log("📨 Other message received:", message);
+        console.log("   Event type:", jsonData.event);
+    }
+} catch (error) {
+    console.error("❌ Error parsing WebSocket message:", error);
+    console.error("   Raw message:", message);
+}
+```
+
+**Access Flat Structure in Events:**
+
+```
+Conditions:
+  → Variable AprilTagFlat.tag_id > 0
+
+Actions:
+  → Sprite: Set X to 400 + Variable(AprilTagFlat.x_cm) * 5
+  → Sprite: Set Y to 300 - Variable(AprilTagFlat.y_cm) * 5
+  → Text: Set text to "Tag " + ToString(Variable(AprilTagFlat.tag_id)) + 
+                       " at " + ToString(Variable(AprilTagFlat.distance_cm)) + " cm"
+```
+
+---
+
+## 🎯 Alternative 2: Simple Variables Without Structure
+
+If you don't need all fields, you can extract just what you need into separate variables:
 
 ```javascript
 const message = runtimeScene.getVariables().get("WebSocket_LastMessage").getAsString();
@@ -226,7 +307,7 @@ try {
     if (jsonData.event === "apriltag_data") {
         const data = jsonData.data;
         
-        // Store only the fields you need
+        // Store only the fields you need as separate variables
         runtimeScene.getVariables().get("TagID").setNumber(data.tag_id || 0);
         runtimeScene.getVariables().get("TagX").setNumber(data.x_cm || 0);
         runtimeScene.getVariables().get("TagY").setNumber(data.y_cm || 0);
