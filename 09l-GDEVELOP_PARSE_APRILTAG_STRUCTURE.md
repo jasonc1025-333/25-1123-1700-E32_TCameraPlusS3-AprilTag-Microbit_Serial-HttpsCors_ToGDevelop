@@ -141,9 +141,14 @@ try {
             position: [tagData.x_cm, tagData.y_cm, tagData.z_cm],
             rotation: [tagData.yaw, tagData.pitch, tagData.roll]
         });
+    } else {
+        // NOT apriltag_data - print raw message for debugging
+        console.log("📨 Other message received:", message);
+        console.log("   Event type:", jsonData.event);
     }
 } catch (error) {
     console.error("❌ Error parsing WebSocket message:", error);
+    console.error("   Raw message:", message);
 }
 ```
 
