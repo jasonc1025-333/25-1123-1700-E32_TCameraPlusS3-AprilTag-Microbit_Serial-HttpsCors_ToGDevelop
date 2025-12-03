@@ -481,8 +481,9 @@ unsigned long http_send_time_last = 0;
 //// jwc 
 //// jwc __This is faster than human reaction time (300ms)__, so it feels instant.
 
-//// jwc 25-1128-0943 OLD (conservative): const unsigned long HTTP_SEND_INTERVAL_MS = 2000;  // 2s (0.5 req/sec)
-const unsigned long HTTP_SEND_INTERVAL_MS = 500;  // 0.5s (2 req/sec) - 4x more responsive!
+//// jwc 25-1128-0943 ARCHIVED (conservative): const unsigned long HTTP_SEND_INTERVAL_MS = 2000;  // 2s (0.5 req/sec)
+//// jwc 25-1203-1000 ARCHIVED (fast): const unsigned long HTTP_SEND_INTERVAL_MS = 500;  // 0.5s (2 req/sec) - 4x more responsive!
+const unsigned long HTTP_SEND_INTERVAL_MS = 1000;  // 1.0s (1 msg/sec) - Gives GDevelop time to process each message
 
 // Rate limiting for list additions - prevent list overflow
 unsigned long list_add_time_last = 0;
@@ -743,26 +744,28 @@ bool sendAprilTagDataWebSocket(int tag_id, const char* camera_name, float yaw, f
     
     unsigned long send_start = millis();
     
-    // Create JSON message
+    // Create JSON message (flat/non-nested structure)
     StaticJsonDocument<512> doc;
     doc["event"] = "apriltag_data";
-    
-    JsonObject data = doc.createNestedObject("data");
-    data["smartcam_ip"] = WiFi.localIP().toString();
-    data["tag_id"] = tag_id;
-    data["camera_name"] = camera_name;
-    data["x_cm"] = round(x_cm * 10) / 10.0;
-    data["y_cm"] = round(y_cm * 10) / 10.0;
-    data["z_cm"] = round(z_cm * 10) / 10.0;
-    data["yaw"] = round(yaw * 10) / 10.0;
-    data["pitch"] = round(pitch * 10) / 10.0;
-    data["roll"] = round(roll * 10) / 10.0;
-    data["tag_size_percent"] = round(tag_size_percent * 10) / 10.0;
-    data["distance_cm"] = round(distance_cm * 10) / 10.0;
-    data["timestamp"] = millis();
+    doc["smartcam_ip"] = WiFi.localIP().toString();
+    doc["tag_id"] = tag_id;
+    doc["camera_name"] = camera_name;
+    doc["x_cm"] = round(x_cm * 10) / 10.0;
+    doc["y_cm"] = round(y_cm * 10) / 10.0;
+    doc["z_cm"] = round(z_cm * 10) / 10.0;
+    doc["yaw"] = round(yaw * 10) / 10.0;
+    doc["pitch"] = round(pitch * 10) / 10.0;
+    doc["roll"] = round(roll * 10) / 10.0;
+    doc["tag_size_percent"] = round(tag_size_percent * 10) / 10.0;
+    doc["distance_cm"] = round(distance_cm * 10) / 10.0;
+    doc["timestamp"] = millis();
     
     String json;
     serializeJson(doc, json);
+    
+    // DEBUG: Print full JSON message
+    printf("📤 WebSocket JSON Message:\n");
+    printf("   %s\n", json.c_str());
     
     // Send via WebSocket
     bool sent = webSocket.sendTXT(json);
