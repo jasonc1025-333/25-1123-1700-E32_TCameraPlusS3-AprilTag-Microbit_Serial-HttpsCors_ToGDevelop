@@ -29,6 +29,7 @@ import json
 from datetime import datetime
 import threading
 import logging
+import re
 
 # ============================================================================
 # CONFIGURATION
@@ -126,6 +127,22 @@ CORS(app, origins="*", supports_credentials=True)
 sock = Sock(app)  # Initialize flask-sock
 
 # ============================================================================
+# UTILITY FUNCTIONS
+# ============================================================================
+
+def fix_json_quotes(message):
+    """
+    Fix JSON with single quotes to use double quotes.
+    GDevelop may send JSON with single quotes, which is invalid JSON.
+    This converts it to valid JSON format.
+    """
+    # Simply replace single quotes with double quotes
+    # This handles the common case where GDevelop sends {'key':'value'}
+    # and converts it to {"key":"value"}
+    fixed = message.replace("'", '"')
+    return fixed
+
+# ============================================================================
 # SECURITY FUNCTIONS
 # ============================================================================
 
@@ -153,13 +170,22 @@ def broadcast_to_gdevelop(message_dict):
     """Broadcast message to all GDevelop clients"""
     message_json = json.dumps(message_dict)
     
+    # DEBUG: Print what we're broadcasting
+    print(f"🔊 BROADCAST to GDevelop ({len(websocket_clients['gdevelop'])} clients):")
+    print(f"   Event: {message_dict.get('event', 'unknown')}")
+    if message_dict.get('event') == 'apriltag_data':
+        data = message_dict.get('data', {})
+        print(f"   Data: tag_id={data.get('tag_id')}, x={data.get('x_cm'):.1f}, y={data.get('y_cm'):.1f}, z={data.get('z_cm'):.1f}")
+    print(f"   Full JSON: {message_json[:200]}..." if len(message_json) > 200 else f"   Full JSON: {message_json}")
+    
     with websocket_lock:
         disconnected = []
         for ws in websocket_clients['gdevelop']:
             try:
                 ws.send(message_json)
+                print(f"   ✅ Sent to GDevelop client")
             except Exception as e:
-                print(f"❌ Error sending to GDevelop client: {e}")
+                print(f"   ❌ Error sending to GDevelop client: {e}")
                 disconnected.append(ws)
         
         # Remove disconnected clients
@@ -180,12 +206,14 @@ def handle_esp32_message(ws, message):
             is_valid, error_msg = validate_auth_token(data)
             
             if not is_valid:
-                print(f"❌ ESP32 AUTH FAILED: {error_msg}")
-                ws.send(json.dumps({
+                auth_fail_msg = {
                     'event': 'auth_failed',
                     'error': error_msg,
                     'message': 'Authentication required - check your auth_token'
-                }))
+                }
+                print(f"❌ ESP32 AUTH FAILED: {error_msg}")
+                print(f"📤 SEND to ESP32: {json.dumps(auth_fail_msg)}")
+                ws.send(json.dumps(auth_fail_msg))
                 return  # Don't add to clients list
             
             with websocket_lock:
@@ -193,8 +221,18 @@ def handle_esp32_message(ws, message):
                     websocket_clients['esp32'].append(ws)
                     stats['esp32_connected'] = True
             
-            print(f"📹 ESP32 IDENTIFIED ✅ (Authenticated)")
-            ws.send(json.dumps({'event': 'identify_success', 'client_type': 'esp32'}))
+            esp32_name = data.get('data', {}).get('camera_name', 'ESP32-Unknown')
+            
+            identify_success_msg = {'event': 'identify_success', 'client_type': 'esp32'}
+            print(f"\n{'='*70}")
+            print(f"📹 ESP32 CLIENT IDENTIFIED ✅")
+            print(f"{'='*70}")
+            print(f" Camera Name: {esp32_name}")
+            print(f"🔐 Authentication: PASSED")
+            print(f"📊 ESP32 Clients: {len(websocket_clients['esp32'])}")
+            print(f"{'='*70}\n")
+            print(f"📤 SEND to ESP32: {json.dumps(identify_success_msg)}")
+            ws.send(json.dumps(identify_success_msg))
             
         elif event == 'apriltag_data':
             # Received AprilTag data from ESP32
@@ -234,7 +272,9 @@ def handle_esp32_message(ws, message):
                   f"Pos=({payload.get('x_cm', 0):.1f}, {payload.get('y_cm', 0):.1f}, {payload.get('z_cm', 0):.1f}) cm")
             
             # Acknowledge to ESP32
-            ws.send(json.dumps({'event': 'apriltag_ack', 'status': 'received'}))
+            ack_msg = {'event': 'apriltag_ack', 'status': 'received'}
+            print(f"📤 SEND to ESP32 (ACK): {json.dumps(ack_msg)}")
+            ws.send(json.dumps(ack_msg))
             
         elif event == 'video_frame':
             # Received video frame
@@ -242,7 +282,9 @@ def handle_esp32_message(ws, message):
             print(f"📹 Video frame received (#{stats['video_frames']})")
             
         elif event == 'ping':
-            ws.send(json.dumps({'event': 'pong', 'timestamp': time.time()}))
+            pong_msg = {'event': 'pong', 'timestamp': time.time()}
+            print(f"📤 SEND to ESP32 (PONG): {json.dumps(pong_msg)}")
+            ws.send(json.dumps(pong_msg))
             
     except json.JSONDecodeError:
         print(f"❌ Invalid JSON from ESP32: {message[:100]}")
@@ -262,22 +304,39 @@ def handle_gdevelop_message(ws, message):
                     websocket_clients['gdevelop'].append(ws)
                     stats['gdevelop_clients'] = len(websocket_clients['gdevelop'])
             
-            print(f"🎮 GDevelop IDENTIFIED (Total: {stats['gdevelop_clients']})")
-            ws.send(json.dumps({'event': 'identify_success', 'client_type': 'gdevelop'}))
+            gdevelop_name = data.get('data', {}).get('name', 'GDevelop-Client')
+            
+            identify_success_msg = {'event': 'identify_success', 'client_type': 'gdevelop'}
+            print(f"\n{'='*70}")
+            print(f"🎮 GDEVELOP CLIENT IDENTIFIED ✅")
+            print(f"{'='*70}")
+            print(f"🎮 Client Name: {gdevelop_name}")
+            print(f"📊 GDevelop Clients: {stats['gdevelop_clients']}")
+            print(f"{'='*70}\n")
+            print(f"📤 SEND to GDevelop: {json.dumps(identify_success_msg)}")
+            ws.send(json.dumps(identify_success_msg))
             
             # Send latest data if available
             if latest_apriltag_data:
-                ws.send(json.dumps({'event': 'apriltag_data', 'data': latest_apriltag_data}))
+                latest_data_msg = {'event': 'apriltag_data', 'data': latest_apriltag_data}
+                print(f"📤 SEND to GDevelop (Latest Data): {json.dumps(latest_data_msg)[:200]}...")
+                ws.send(json.dumps(latest_data_msg))
                 
         elif event == 'request_latest_data':
             # GDevelop requesting latest data
             if latest_apriltag_data:
-                ws.send(json.dumps({'event': 'apriltag_data', 'data': latest_apriltag_data}))
+                latest_data_msg = {'event': 'apriltag_data', 'data': latest_apriltag_data}
+                print(f"📤 SEND to GDevelop (Requested Data): {json.dumps(latest_data_msg)[:200]}...")
+                ws.send(json.dumps(latest_data_msg))
             else:
-                ws.send(json.dumps({'event': 'no_data_available'}))
+                no_data_msg = {'event': 'no_data_available'}
+                print(f"📤 SEND to GDevelop: {json.dumps(no_data_msg)}")
+                ws.send(json.dumps(no_data_msg))
                 
         elif event == 'ping':
-            ws.send(json.dumps({'event': 'pong', 'timestamp': time.time()}))
+            pong_msg = {'event': 'pong', 'timestamp': time.time()}
+            print(f"📤 SEND to GDevelop (PONG): {json.dumps(pong_msg)}")
+            ws.send(json.dumps(pong_msg))
             
     except json.JSONDecodeError:
         print(f"❌ Invalid JSON from GDevelop: {message[:100]}")
@@ -290,17 +349,33 @@ def websocket(ws):
     stats['total_connections'] += 1
     stats['active_connections'] += 1
     
+    # Get client connection info
+    client_ip = request.remote_addr
+    client_user_agent = request.headers.get('User-Agent', 'Unknown')
+    client_origin = request.headers.get('Origin', 'Unknown')
+    client_host = request.headers.get('Host', 'Unknown')
+    
     print(f"\n{'='*70}")
-    print(f"🔌 WebSocket CONNECTED (Total: {stats['active_connections']})")
+    print(f"🔌 NEW WebSocket CONNECTION")
+    print(f"{'='*70}")
+    print(f"📍 Client IP: {client_ip}")
+    print(f"🌐 Origin: {client_origin}")
+    print(f"🖥️  Host: {client_host}")
+    print(f"🔍 User-Agent: {client_user_agent[:80]}..." if len(client_user_agent) > 80 else f"🔍 User-Agent: {client_user_agent}")
+    print(f"📊 Total Connections: {stats['total_connections']}")
+    print(f"📊 Active Connections: {stats['active_connections']}")
     print(f"{'='*70}\n")
     
     # Send welcome message
-    ws.send(json.dumps({
+    welcome_msg = {
         'event': 'connection_success',
         'message': 'WebSocket connected - send identify event'
-    }))
+    }
+    print(f"📤 SEND Welcome to {client_ip}: {json.dumps(welcome_msg)}")
+    ws.send(json.dumps(welcome_msg))
     
     client_type = 'unknown'
+    client_identifier = f"{client_ip}:unknown"
     
     try:
         while True:
@@ -310,28 +385,54 @@ def websocket(ws):
             
             # Determine client type from first message
             try:
-                data = json.loads(message)
+                # Fix single quotes to double quotes if needed
+                fixed_message = fix_json_quotes(message)
+                data = json.loads(fixed_message)
                 if data.get('event') == 'identify':
                     client_type = data.get('data', {}).get('type', 'unknown')
             except:
                 pass
             
+            # Fix single quotes to double quotes if needed (do this once for all paths)
+            fixed_message = fix_json_quotes(message)
+            
             # Route message based on client type
             if client_type == 'esp32' or ws in websocket_clients['esp32']:
-                handle_esp32_message(ws, message)
+                handle_esp32_message(ws, fixed_message)
             elif client_type == 'gdevelop' or ws in websocket_clients['gdevelop']:
-                handle_gdevelop_message(ws, message)
+                handle_gdevelop_message(ws, fixed_message)
             else:
-                # Try to parse and route
+                # Try to parse and route (fixed_message already created above)
                 try:
-                    data = json.loads(message)
+                    data = json.loads(fixed_message)
                     event = data.get('event', '')
-                    if event in ['apriltag_data', 'video_frame']:
-                        handle_esp32_message(ws, message)
+                    
+                    # Auto-detect and register GDevelop clients based on event patterns
+                    if event in ['request_latest_data', 'event_FromGDevelop'] or (event not in ['apriltag_data', 'video_frame', 'identify']):
+                        # This looks like a GDevelop client - auto-register it
+                        if ws not in websocket_clients['gdevelop']:
+                            with websocket_lock:
+                                websocket_clients['gdevelop'].append(ws)
+                                stats['gdevelop_clients'] = len(websocket_clients['gdevelop'])
+                            
+                            print(f"\n{'='*70}")
+                            print(f"🎮 AUTO-DETECTED GDevelop CLIENT")
+                            print(f"{'='*70}")
+                            print(f"📍 Client IP: {client_ip}")
+                            print(f"📨 First Event: {event}")
+                            print(f"📊 GDevelop Clients: {stats['gdevelop_clients']}")
+                            print(f"{'='*70}\n")
+                        
+                        client_type = 'gdevelop'
+                        handle_gdevelop_message(ws, fixed_message)
+                    elif event in ['apriltag_data', 'video_frame']:
+                        handle_esp32_message(ws, fixed_message)
                     else:
-                        handle_gdevelop_message(ws, message)
-                except:
-                    print(f"⚠️  Unknown message: {message[:100]}")
+                        handle_gdevelop_message(ws, fixed_message)
+                except Exception as e:
+                    print(f"⚠️  Unknown message (parse error): {message[:100]}")
+                    print(f"    Error: {e}")
+                    print(f"    Attempted fix: {fix_json_quotes(message)[:100]}")
                     
     except Exception as e:
         print(f"❌ WebSocket error: {e}")
@@ -339,16 +440,26 @@ def websocket(ws):
         # Cleanup
         stats['active_connections'] -= 1
         
+        disconnected_type = 'Unknown'
         with websocket_lock:
             for client_list_type in websocket_clients:
                 if ws in websocket_clients[client_list_type]:
                     websocket_clients[client_list_type].remove(ws)
+                    disconnected_type = client_list_type
                     if client_list_type == 'esp32':
                         stats['esp32_connected'] = False
                     elif client_list_type == 'gdevelop':
                         stats['gdevelop_clients'] = len(websocket_clients['gdevelop'])
         
-        print(f"🔌 Client disconnected (Active: {stats['active_connections']})")
+        print(f"\n{'='*70}")
+        print(f"❌ CLIENT DISCONNECTED")
+        print(f"{'='*70}")
+        print(f"📍 Client IP: {client_ip}")
+        print(f"🏷️  Client Type: {disconnected_type.upper()}")
+        print(f"🆔 Identifier: {client_identifier}")
+        print(f"📊 Remaining Active: {stats['active_connections']}")
+        print(f"📊 ESP32: {len(websocket_clients['esp32'])}, GDevelop: {stats['gdevelop_clients']}")
+        print(f"{'='*70}\n")
 
 # ============================================================================
 # LEGACY HTTP ENDPOINTS
@@ -526,17 +637,32 @@ def print_startup_info():
     print(f"   ws://{local_ip}:{SERVER_PORT}/websocket")
     print(f"   wss://your-ngrok.ngrok-free.app/websocket")
     print("="*70)
-    print("📨 Message Format: Standard JSON")
-    print('   {{"event": "identify", "data": {{"type": "esp32"}}}}')
-    print('   {{"event": "apriltag_data", "data": {{...}}}}')
+    print("🌐 HTTP Endpoints:")
+    print(f"   http://{local_ip}:{SERVER_PORT}/")
+    print(f"      └─ Server status dashboard (auto-refresh)")
+    print(f"   http://{local_ip}:{SERVER_PORT}/status")
+    print(f"      └─ JSON status API")
+    print(f"   http://{local_ip}:{SERVER_PORT}/client_gdevelop_to_server__smartcam_data_get")
+    print(f"      └─ Legacy HTTP polling endpoint for GDevelop")
     print("="*70)
-    print("💡 Usage:")
+    print("📨 WebSocket Message Format (JSON):")
+    print('   ESP32 Identify:')
+    print('      {{"event": "identify", "data": {{"type": "esp32", "auth_token": "..."}}}}')
+    print('   GDevelop Identify:')
+    print('      {{"event": "identify", "data": {{"type": "gdevelop"}}}}')
+    print('   AprilTag Data:')
+    print('      {{"event": "apriltag_data", "data": {{"tag_id": 5, ...}}}}')
+    print('   Request Latest:')
+    print('      {{"event": "request_latest_data"}}')
+    print("="*70)
+    print("💡 Quick Start:")
     print("   1. pip install -r 0a-requirements.txt")
-    print("   2. Start ngrok: ngrok http 5000")
-    print("   3. Connect ESP32 to ws://[IP]/websocket")
-    print("   4. Connect GDevelop to ws://[IP]/websocket")
+    print("   2. (Optional) Start ngrok: ngrok http 5000")
+    print("   3. Connect ESP32 to ws://[IP]:5000/websocket")
+    print("   4. Connect GDevelop to ws://[IP]:5000/websocket")
+    print(f"   5. View dashboard: http://{local_ip}:{SERVER_PORT}/")
     print("="*70)
-    print("✅ Server ready!")
+    print("✅ Server ready and listening!")
     print("="*70 + "\n")
 
 if __name__ == '__main__':
