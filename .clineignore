@@ -1,0 +1,60 @@
+# .clineignore - Exclude files/directories from Cline context to reduce token usage
+
+# Large asset directories (GDevelop projects with extensive assets)
+11k-25-1127-0950--25-0713-1400-E32_SmartCam-ToUbuntuServerHub-ToGdevelop-Http-NOW/**
+#### jwc 25-1203-0500 .json file most likely too large (900kb) thus exceeding 200k token limit, though still coding this.  Maybe break up in smaller sections later.
+11k-25-1202-1330--25-1127-0950-E32_SmartCam-ToUbuntuServerHub-ToGdevelop-WebSocket-NOW/**
+
+# Archive directories
+99Z-ARCHIVE-BAD/**
+examples/99-ARCHIVE-GOOD/**
+examples/*-SNAPSHOT-*/**
+
+# Binary and firmware files
+firmware/**
+*.bin
+*.glb
+
+# Large asset files
+**/*.aac
+**/*.mp3
+**/*.wav
+**/*.png
+**/*.jpg
+**/*.jpeg
+**/*.gif
+
+# Library directories (Arduino/PlatformIO libraries)
+libraries/**
+.pio/**
+.vscode/**
+
+# Build artifacts
+compile_commands.json
+*.o
+*.elf
+
+# Documentation images
+image/**
+badges/**
+
+# Temporary and backup files
+**/*.2do
+**/.DS_Store
+**/Thumbs.db
+**/*~
+
+# Git directory
+.git/**
+
+# Node modules (if any JavaScript dependencies)
+**/node_modules/**
+
+# Python cache
+**/__pycache__/**
+**/*.pyc
+
+# Keep important working directories accessible:
+# - examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW/
+# - Main project files in root
+# These are NOT excluded so Cline can still access your working code
