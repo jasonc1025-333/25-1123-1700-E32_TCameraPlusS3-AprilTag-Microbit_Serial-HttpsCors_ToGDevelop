@@ -174,6 +174,45 @@
 //// jwc 25-1126-2200 OPTION 2: ESP32 GET Server for direct polling (ARCHIVED)
 //// jwc 25-1126-2200 #include <ESPAsyncWebServer.h>
 
+// ============================================================================
+// ⚙️  CRITICAL TIMING CONFIGURATION - ADJUST THESE TO CONTROL FPS/PERFORMANCE
+// ============================================================================
+// 
+// These parameters control how often data is transmitted over the network.
+// Adjusting these values affects system responsiveness and network load.
+//
+// 🎯 AprilTag Data Send Rate (WebSocket)
+//    Controls how often AprilTag position/orientation data is sent to server
+//    - Lower value = more responsive but higher network load
+//    - Higher value = less responsive but more stable
+//
+const unsigned long AprilTag_Send_INTERVAL_MS = 1500;  // 1.5s (0.67 msg/sec)
+//    RECOMMENDED VALUES:
+//      500ms  = 2.0 msg/sec (FAST - for gaming/real-time control)
+//      1000ms = 1.0 msg/sec (BALANCED - good responsiveness)
+//      1500ms = 0.67 msg/sec (STABLE - current setting, prevents GDevelop lag)
+//      2000ms = 0.5 msg/sec (CONSERVATIVE - maximum stability)
+//
+// 📹 Video Frame Send Rate (HTTP)
+//    Controls how often camera frames are uploaded for human viewing
+//    - This is separate from AprilTag detection which runs continuously
+//    - Video upload is slow, so keep this interval high to avoid blocking
+//
+const unsigned long VideoFrame_Send_INTERVAL_MS = 3000;  // 3s (0.33 FPS)
+//    RECOMMENDED VALUES:
+//      3000ms = 0.33 FPS (CURRENT - prevents lag, good for monitoring)
+//      5000ms = 0.20 FPS (VERY SLOW - minimal network impact)
+//      1000ms = 1.0 FPS (FASTER - may cause system lag)
+//
+// 📸 Camera Hardware Rate (informational - set elsewhere in code)
+//    - Camera captures frames continuously (as fast as possible)
+//    - Camera clock: 15 MHz (config.xclk_freq_hz in OV2640_Initialization)
+//    - Frame resolution: 240x240 pixels (FRAMESIZE_240X240)
+//    - AprilTag detection: Processes every frame in real-time
+//    - Only TRANSMISSION is rate-limited by the intervals above
+//
+// ============================================================================
+
 // WiFi credentials
 //
 //// jwc 25-1120-0910 WiFi Configuration - hardcoded like Python code
@@ -390,7 +429,6 @@ const char* client_e32__http_post_to_serverhub__smartcam_video_stream_URL = "htt
 
 // Video streaming timing control - Optimized settings
 unsigned long video_send_time_last = 0;
-const unsigned long VIDEO_SEND_INTERVAL_MS = 3000;  // 3 seconds (0.33 FPS) - slow enough to not block AprilTag detection
 const int VIDEO_JPEG_QUALITY = 10;  // Low quality (1-100, lower = smaller file, faster upload)
 
 // Rate limiting - don't send too frequently
@@ -483,7 +521,10 @@ unsigned long http_send_time_last = 0;
 
 //// jwc 25-1128-0943 ARCHIVED (conservative): const unsigned long HTTP_SEND_INTERVAL_MS = 2000;  // 2s (0.5 req/sec)
 //// jwc 25-1203-1000 ARCHIVED (fast): const unsigned long HTTP_SEND_INTERVAL_MS = 500;  // 0.5s (2 req/sec) - 4x more responsive!
-const unsigned long HTTP_SEND_INTERVAL_MS = 1000;  // 1.0s (1 msg/sec) - Gives GDevelop time to process each message
+//// jwc 25-1203-1600 y yet slight l0-20% lag const unsigned long HTTP_SEND_INTERVAL_MS = 1000;  // 1.0s (1 msg/sec) - Gives GDevelop time to process each message
+//// jwc 25-1203-1600 provide some more buffer since 3d and video-stream to allow for real-time of april-tags
+//// jwc 25-1203-1700 y Still somewhat laggy: const unsigned long HTTP_SEND_INTERVAL_MS = 1500;  // 1.5s (0.67 msg/sec) - Gives GDevelop time to process each message
+const unsigned long HTTP_SEND_INTERVAL_MS = 2000;  // 2.0s (0.50 msg/sec) - Gives GDevelop time to process each message
 
 // Rate limiting for list additions - prevent list overflow
 unsigned long list_add_time_last = 0;
@@ -508,18 +549,12 @@ extern Arduino_TFT *gfx;
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     switch(type) {
         case WStype_DISCONNECTED:
-            printf("\n%s\n", createSeparator('=', 70).c_str());
-            printf("❌ WebSocket DISCONNECTED!\n");
-            printf("   Total messages: %lu, Reconnects: %lu\n", totalMessagesSent, totalReconnects);
-            printf("%s\n", createSeparator('=', 70).c_str());
+            printf("❌ WebSocket DISCONNECTED | TotalMsg=%lu, Reconnects=%lu\n", totalMessagesSent, totalReconnects);
             webSocketConnected = false;
             break;
             
         case WStype_CONNECTED: {
-            printf("\n%s\n", createSeparator('=', 70).c_str());
-            printf("✅ WebSocket CONNECTED!\n");
-            printf("   URL: ws://%s:%d%s\n", WS_HOST, WS_PORT, WS_PATH);
-            printf("%s\n", createSeparator('=', 70).c_str());
+            printf("✅ WebSocket CONNECTED | URL=ws://%s:%d%s\n", WS_HOST, WS_PORT, WS_PATH);
             webSocketConnected = true;
             
             // Send identify message with auth token
@@ -535,12 +570,12 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
             serializeJson(identifyDoc, identifyJson);
             webSocket.sendTXT(identifyJson);
             
-            printf("📨 Sent identification with auth token\n");
+            printf("🔵<<-- SEND: identify | Auth=%s\n", AUTH_TOKEN);
             break;
         }
             
         case WStype_TEXT: {
-            printf("📨 Server response: %s\n", (char*)payload);
+            printf("🟢-->> RECV: %s\n", (char*)payload);
             
             // Parse server responses
             StaticJsonDocument<512> doc;
@@ -550,13 +585,13 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 const char* event = doc["event"];
                 
                 if (strcmp(event, "connection_success") == 0) {
-                    printf("✅ Server acknowledged connection\n");
+                    printf("      ✅ Server: connection acknowledged\n");
                 }
                 else if (strcmp(event, "identify_success") == 0) {
-                    printf("✅ Successfully identified and authenticated\n");
+                    printf("      ✅ Server: identified & authenticated\n");
                 }
                 else if (strcmp(event, "apriltag_ack") == 0) {
-                    printf("✅ AprilTag data acknowledged by server\n");
+                    printf("      ✅ Server: apriltag_data acknowledged\n");
                 }
             }
             break;
@@ -659,8 +694,6 @@ bool sendVideoFrame(camera_fb_t *fb) {
         }
     }
     
-    printf("\n>>> VIDEO: Sending frame (Size: %d bytes, Quality: %d)...\n", jpg_buf_len, VIDEO_JPEG_QUALITY);
-    
     //// jwc 25-1130-0400 OLD METHOD (SSL error -29312 with HTTPS):
     //// jwc 25-1130-0400 HTTPClient http;
     //// jwc 25-1130-0400 http.begin(client_e32__http_post_to_serverhub__smartcam_video_stream_URL);
@@ -700,30 +733,20 @@ bool sendVideoFrame(camera_fb_t *fb) {
     http.end();  // End HTTP connection
     delete client;  // Clean up WiFiClient
     
-    if (httpResponseCode > 0) {
-        printf(">>> VIDEO SUCCESS: Frame uploaded (Code: %d)\n", httpResponseCode);
-        
-        // Free converted JPEG buffer if we allocated it
-        if (jpg_converted && jpg_buf) {
-            free(jpg_buf);
-        }
-        return true;
-    } else {
-        // Detailed error messages for common codes
-        printf(">>> VIDEO FAILURE: Upload failed (Code: %d)\n", httpResponseCode);
-        if (httpResponseCode == -1) {
-            printf("    - Error -1: Connection refused. Server may not be running or endpoint missing.\n");
-            printf("    - Check server URL: %s\n", client_e32__http_post_to_serverhub__smartcam_video_stream_URL);
-        } else if (httpResponseCode == -11) {
-            printf("    - Error -11: Timeout. Server not responding or network slow.\n");
-        }
-        
-        // Free converted JPEG buffer if we allocated it
-        if (jpg_converted && jpg_buf) {
-            free(jpg_buf);
-        }
-        return false;
+    // Consolidated VIDEO debug print (1 line, all info preserved)
+    printf("\n*** VIDEO 2of2: Size=%db Q=%d | %s Code=%d%s\n", 
+           jpg_buf_len, VIDEO_JPEG_QUALITY,
+           (httpResponseCode > 0) ? "SUCCESS" : "FAILURE",
+           httpResponseCode,
+           (httpResponseCode == -1) ? " (Connection refused - check server)" : 
+           (httpResponseCode == -11) ? " (Timeout - server slow/unresponsive)" : "");
+    
+    // Free converted JPEG buffer if we allocated it
+    if (jpg_converted && jpg_buf) {
+        free(jpg_buf);
     }
+    
+    return (httpResponseCode > 0);
 }
 
 //// jwc 25-1126-2200 OPTION 1: Real-time HTTP POST (ACTIVE)
@@ -763,10 +786,6 @@ bool sendAprilTagDataWebSocket(int tag_id, const char* camera_name, float yaw, f
     String json;
     serializeJson(doc, json);
     
-    // DEBUG: Print full JSON message
-    printf("📤 WebSocket JSON Message:\n");
-    printf("   %s\n", json.c_str());
-    
     // Send via WebSocket
     bool sent = webSocket.sendTXT(json);
     
@@ -775,8 +794,8 @@ bool sendAprilTagDataWebSocket(int tag_id, const char* camera_name, float yaw, f
     if (sent) {
         totalMessagesSent++;
         
-        printf("📤 WebSocket Sent (#%lu): Tag ID=%d, Pos=(%.1f,%.1f,%.1f) cm, Yaw=%.1f° [%lums]\n", 
-               totalMessagesSent, tag_id, x_cm, y_cm, z_cm, yaw, send_duration);
+        printf("🔵<<-- SEND: apriltag_data (#%lu) | ID=%d Pos=(%.1f,%.1f,%.1f)cm Yaw=%.1f° [%lums] | JSON=%s\n", 
+               totalMessagesSent, tag_id, x_cm, y_cm, z_cm, yaw, send_duration, json.c_str());
         
         // Update TFT display
         gfx->setTextSize(1);
@@ -785,7 +804,7 @@ bool sendAprilTagDataWebSocket(int tag_id, const char* camera_name, float yaw, f
         
         return true;
     } else {
-        printf("❌ WebSocket send failed\n");
+        printf("❌ WebSocket SEND FAILED\n");
         
         // Show error on display
         gfx->setTextSize(1);
@@ -964,8 +983,8 @@ bool OV2640_Initialization(void)
     //   - Solution: Lower clock speed if errors occur
     //
     // IMPACT ON APRILTAG PROCESSING:
-    //   - 10→15 MHz: ~33% reduction in frame capture time
-    //   - 15→20 MHz: ~25% reduction in frame capture time
+    //   - 10<<--15 MHz: ~33% reduction in frame capture time
+    //   - 15<<--20 MHz: ~25% reduction in frame capture time
     //   - Total system speedup: 10-20% (frame capture is only part of pipeline)
     // ============================================================================
     
@@ -1225,10 +1244,7 @@ void setup()
     
     //// jwc 25-1202-2030 Initialize WebSocket after WiFi
     if (wifi_connected) {
-        printf("\n%s\n", createSeparator('=', 70).c_str());
-        printf("🔌 Initializing WebSocket Client...\n");
-        printf("   Server: ws://%s:%d%s\n", WS_HOST, WS_PORT, WS_PATH);
-        printf("%s\n", createSeparator('=', 70).c_str());
+        printf("🔌 WebSocket Init | Server=ws://%s:%d%s\n", WS_HOST, WS_PORT, WS_PATH);
         
         // Set event handler
         webSocket.onEvent(webSocketEvent);
@@ -1724,7 +1740,7 @@ void loop()
     // Check if it's time to send tag data from list via HTTP
     unsigned long current_time = millis();
     if (list_count > 0 && 
-        (current_time - http_send_time_last >= HTTP_SEND_INTERVAL_MS)) {
+        (current_time - http_send_time_last >= AprilTag_Send_INTERVAL_MS)) {
         
         // Remove oldest tag from list
         tagData_Struct tag_to_send;
@@ -1738,7 +1754,7 @@ void loop()
             if (s) {
                 camera_sensor_info_t *sinfo = esp_camera_sensor_get_info(&(s->id));
                 if (sinfo) {
-                    //// jwc 25-1202-2030 CHANGED: HTTP→WebSocket (removed camera_name param)
+                    //// jwc 25-1202-2030 CHANGED: HTTP<<--WebSocket (removed camera_name param)
                     sendAprilTagDataWebSocket(tag_to_send.tag_id, sinfo->name,
                                    tag_to_send.yaw, tag_to_send.pitch, tag_to_send.roll,
                                    tag_to_send.x_cm, tag_to_send.y_cm, tag_to_send.z_cm,
@@ -1764,25 +1780,22 @@ void loop()
     bool should_send_video = false;
     
     if (OV2640_Initialization_Flag && wifi_connected && 
-        (current_time - video_send_time_last >= VIDEO_SEND_INTERVAL_MS)) {
+        (current_time - video_send_time_last >= VideoFrame_Send_INTERVAL_MS)) {
         
         if (lag_ms < 3000) {
             // System processing fast (lag < 3s) - send video regularly
             should_send_video = true;
-            #if DEBUG >= 1
-            printf("*** VIDEO: Lag=%lums - Regular streaming mode\n", lag_ms);
-            #endif
         } else if (apriltag_detected_in_frame) {
             // System is lagging (lag >= 3s) - only send frames with new AprilTag detections
             should_send_video = true;
-            #if DEBUG >= 1
-            printf("*** VIDEO: Lag=%lums - Smart mode: Sending frame with NEW AprilTag detection\n", lag_ms);
-            #endif
         }
-        #if DEBUG >= 2
-        else {
-            printf("*** VIDEO: Lag=%lums - Smart mode: Skipping frame (no new AprilTag)\n", lag_ms);
-        }
+        
+        #if DEBUG >= 1
+        // Consolidated VIDEO debug print (1 line, all info preserved)
+        printf("\n*** VIDEO 1of1: Lag=%lums - %s", lag_ms, 
+               (lag_ms < 3000) ? "Regular streaming mode" : 
+               (apriltag_detected_in_frame) ? "Smart mode: Sending frame with NEW AprilTag detection" : 
+               "Smart mode: Skipping frame (no new AprilTag)");
         #endif
     }
     
