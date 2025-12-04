@@ -5,7 +5,7 @@ Pure WebSocket Server for ESP32 AprilTag & GDevelop Communication
 Uses flask-sock for reliable WebSocket support
 
 Architecture:
-    ESP32 → WebSocket → Python Server → WebSocket → GDevelop
+    ESP32 <<-- WebSocket <<-- Python Server -->> WebSocket -->> GDevelop
     
 Features:
     - Reliable WebSocket using flask-sock
@@ -171,22 +171,22 @@ def broadcast_to_gdevelop(message_dict):
     """Broadcast message to all GDevelop clients"""
     message_json = json.dumps(message_dict)
     
-    # DEBUG: Print what we're broadcasting
-    print(f"🔊 BROADCAST to GDevelop ({len(websocket_clients['gdevelop'])} clients):")
-    print(f"   Event: {message_dict.get('event', 'unknown')}")
-    if message_dict.get('event') == 'apriltag_data':
-        # Flat JSON - fields are at top level, not in nested 'data'
-        print(f"   Data: tag_id={message_dict.get('tag_id', 0)}, x={message_dict.get('x_cm', 0):.1f}, y={message_dict.get('y_cm', 0):.1f}, z={message_dict.get('z_cm', 0):.1f}")
-    print(f"   Full JSON: {message_json[:200]}..." if len(message_json) > 200 else f"   Full JSON: {message_json}")
+    # Compact single-line debug print with ALL info preserved
+    event_name = message_dict.get('event', 'unknown')
+    data_info = ""
+    if event_name == 'apriltag_data':
+        data_info = f" tag_id={message_dict.get('tag_id', 0)}, x={message_dict.get('x_cm', 0):.1f}, y={message_dict.get('y_cm', 0):.1f}, z={message_dict.get('z_cm', 0):.1f}"
+    json_preview = message_json[:200] + '...' if len(message_json) > 200 else message_json
+    print(f"🔵<<-- SEND to GDevelop ({len(websocket_clients['gdevelop'])} clients): Event={event_name},{data_info} JSON={json_preview}")
     
     with websocket_lock:
         disconnected = []
         for ws in websocket_clients['gdevelop']:
             try:
                 ws.send(message_json)
-                print(f"   ✅ Sent to GDevelop client")
+                print(f"      ✅ Delivered")
             except Exception as e:
-                print(f"   ❌ Error sending to GDevelop client: {e}")
+                print(f"      ❌ Error: {e}")
                 disconnected.append(ws)
         
         # Remove disconnected clients
@@ -212,8 +212,8 @@ def handle_esp32_message(ws, message):
                     'error': error_msg,
                     'message': 'Authentication required - check your auth_token'
                 }
-                print(f"❌ ESP32 AUTH FAILED: {error_msg}")
-                print(f"📤 SEND to ESP32: {json.dumps(auth_fail_msg)}")
+                print(f"🟢-->> RECV ESP32: identify (AUTH FAILED: {error_msg})")
+                print(f"🔵<<-- SEND to ESP32: {json.dumps(auth_fail_msg)}")
                 ws.send(json.dumps(auth_fail_msg))
                 return  # Don't add to clients list
             
@@ -225,14 +225,8 @@ def handle_esp32_message(ws, message):
             esp32_name = data.get('data', {}).get('camera_name', 'ESP32-Unknown')
             
             identify_success_msg = {'event': 'identify_success', 'client_type': 'esp32'}
-            print(f"\n{'='*70}")
-            print(f"📹 ESP32 CLIENT IDENTIFIED ✅")
-            print(f"{'='*70}")
-            print(f" Camera Name: {esp32_name}")
-            print(f"🔐 Authentication: PASSED")
-            print(f"📊 ESP32 Clients: {len(websocket_clients['esp32'])}")
-            print(f"{'='*70}\n")
-            print(f"📤 SEND to ESP32: {json.dumps(identify_success_msg)}")
+            print(f"🟢-->> RECV ESP32: identify | 📹 ESP32 CLIENT IDENTIFIED ✅ Camera={esp32_name}, Auth=PASSED, ESP32_Clients={len(websocket_clients['esp32'])}")
+            print(f"🔵<<-- SEND to ESP32: {json.dumps(identify_success_msg)}")
             ws.send(json.dumps(identify_success_msg))
             
         elif event == 'apriltag_data':
@@ -276,26 +270,22 @@ def handle_esp32_message(ws, message):
             
             stats['apriltag_events'] += 1
             
-            print(f"📡 AprilTag → GDevelop ({stats['gdevelop_clients']} clients): "
-                  f"ID={payload.get('tag_id')}, "
-                  f"Pos=({payload.get('x_cm', 0):.1f}, {payload.get('y_cm', 0):.1f}, {payload.get('z_cm', 0):.1f}) cm")
-            
-            # DEBUG: Print full JSON being sent
-            print(f"📤 FULL JSON to GDevelop: {json.dumps(broadcast_message)}")
+            print(f"🟢-->> RECV ESP32: apriltag_data | 📡 ID={payload.get('tag_id')}, Pos=({payload.get('x_cm', 0):.1f},{payload.get('y_cm', 0):.1f},{payload.get('z_cm', 0):.1f})cm <<-- GDevelop({stats['gdevelop_clients']}) | JSON={json.dumps(broadcast_message)[:150]}...")
             
             # Acknowledge to ESP32
             ack_msg = {'event': 'apriltag_ack', 'status': 'received'}
-            print(f"📤 SEND to ESP32 (ACK): {json.dumps(ack_msg)}")
+            print(f"🔵<<-- SEND to ESP32 (ACK): {json.dumps(ack_msg)}")
             ws.send(json.dumps(ack_msg))
             
         elif event == 'video_frame':
             # Received video frame
             stats['video_frames'] += 1
-            print(f"📹 Video frame received (#{stats['video_frames']})")
+            print(f"🟢-->> RECV ESP32: video_frame | 📹 Frame #{stats['video_frames']}")
             
         elif event == 'ping':
+            print(f"🟢-->> RECV ESP32: ping")
             pong_msg = {'event': 'pong', 'timestamp': time.time()}
-            print(f"📤 SEND to ESP32 (PONG): {json.dumps(pong_msg)}")
+            print(f"🔵<<-- SEND to ESP32 (PONG): {json.dumps(pong_msg)}")
             ws.send(json.dumps(pong_msg))
             
     except json.JSONDecodeError:
@@ -319,35 +309,32 @@ def handle_gdevelop_message(ws, message):
             gdevelop_name = data.get('data', {}).get('name', 'GDevelop-Client')
             
             identify_success_msg = {'event': 'identify_success', 'client_type': 'gdevelop'}
-            print(f"\n{'='*70}")
-            print(f"🎮 GDEVELOP CLIENT IDENTIFIED ✅")
-            print(f"{'='*70}")
-            print(f"🎮 Client Name: {gdevelop_name}")
-            print(f"📊 GDevelop Clients: {stats['gdevelop_clients']}")
-            print(f"{'='*70}\n")
-            print(f"📤 SEND to GDevelop: {json.dumps(identify_success_msg)}")
+            print(f"🟢-->> RECV GDevelop: identify | 🎮 GDEVELOP CLIENT IDENTIFIED ✅ Name={gdevelop_name}, GDevelop_Clients={stats['gdevelop_clients']}")
+            print(f"🔵<<-- SEND to GDevelop: {json.dumps(identify_success_msg)}")
             ws.send(json.dumps(identify_success_msg))
             
             # Send latest data if available (FLAT format)
             if latest_apriltag_data:
                 latest_data_msg = {'event': 'apriltag_data', **latest_apriltag_data}
-                print(f"📤 SEND to GDevelop (Latest Data): {json.dumps(latest_data_msg)[:200]}...")
+                print(f"🔵<<-- SEND to GDevelop (Latest Data): {json.dumps(latest_data_msg)[:200]}...")
                 ws.send(json.dumps(latest_data_msg))
                 
         elif event == 'request_latest_data':
+            print(f"🟢-->> RECV GDevelop: request_latest_data")
             # GDevelop requesting latest data (FLAT format)
             if latest_apriltag_data:
                 latest_data_msg = {'event': 'apriltag_data', **latest_apriltag_data}
-                print(f"📤 SEND to GDevelop (Requested Data): {json.dumps(latest_data_msg)[:200]}...")
+                print(f"🔵<<-- SEND to GDevelop (Requested Data): {json.dumps(latest_data_msg)[:200]}...")
                 ws.send(json.dumps(latest_data_msg))
             else:
                 no_data_msg = {'event': 'no_data_available'}
-                print(f"📤 SEND to GDevelop: {json.dumps(no_data_msg)}")
+                print(f"🔵<<-- SEND to GDevelop: {json.dumps(no_data_msg)}")
                 ws.send(json.dumps(no_data_msg))
                 
         elif event == 'ping':
+            print(f"🟢-->> RECV GDevelop: ping")
             pong_msg = {'event': 'pong', 'timestamp': time.time()}
-            print(f"📤 SEND to GDevelop (PONG): {json.dumps(pong_msg)}")
+            print(f"🔵<<-- SEND to GDevelop (PONG): {json.dumps(pong_msg)}")
             ws.send(json.dumps(pong_msg))
             
     except json.JSONDecodeError:
@@ -383,7 +370,7 @@ def websocket(ws):
         'event': 'connection_success',
         'message': 'WebSocket connected - send identify event'
     }
-    print(f"📤 SEND Welcome to {client_ip}: {json.dumps(welcome_msg)}")
+    print(f"🔵<<-- SEND Welcome to {client_ip}: {json.dumps(welcome_msg)}")
     ws.send(json.dumps(welcome_msg))
     
     client_type = 'unknown'
@@ -427,13 +414,7 @@ def websocket(ws):
                                 websocket_clients['gdevelop'].append(ws)
                                 stats['gdevelop_clients'] = len(websocket_clients['gdevelop'])
                             
-                            print(f"\n{'='*70}")
-                            print(f"🎮 AUTO-DETECTED GDevelop CLIENT")
-                            print(f"{'='*70}")
-                            print(f"📍 Client IP: {client_ip}")
-                            print(f"📨 First Event: {event}")
-                            print(f"📊 GDevelop Clients: {stats['gdevelop_clients']}")
-                            print(f"{'='*70}\n")
+                            print(f"🎮 AUTO-DETECTED GDevelop CLIENT | IP={client_ip}, FirstEvent={event}, GDevelop_Clients={stats['gdevelop_clients']}")
                         
                         client_type = 'gdevelop'
                         handle_gdevelop_message(ws, fixed_message)
@@ -463,15 +444,7 @@ def websocket(ws):
                     elif client_list_type == 'gdevelop':
                         stats['gdevelop_clients'] = len(websocket_clients['gdevelop'])
         
-        print(f"\n{'='*70}")
-        print(f"❌ CLIENT DISCONNECTED")
-        print(f"{'='*70}")
-        print(f"📍 Client IP: {client_ip}")
-        print(f"🏷️  Client Type: {disconnected_type.upper()}")
-        print(f"🆔 Identifier: {client_identifier}")
-        print(f"📊 Remaining Active: {stats['active_connections']}")
-        print(f"📊 ESP32: {len(websocket_clients['esp32'])}, GDevelop: {stats['gdevelop_clients']}")
-        print(f"{'='*70}\n")
+        print(f"❌ CLIENT DISCONNECTED | IP={client_ip}, Type={disconnected_type.upper()}, ID={client_identifier}, Active={stats['active_connections']}, ESP32={len(websocket_clients['esp32'])}, GDevelop={stats['gdevelop_clients']}")
 
 # ============================================================================
 # LEGACY HTTP ENDPOINTS
@@ -576,7 +549,7 @@ def video_viewer():
                 min-height: 100vh;
             }}
             .container {{
-                max-width: 800px;
+                max-width: 400px;
                 width: 100%;
             }}
             h1 {{
