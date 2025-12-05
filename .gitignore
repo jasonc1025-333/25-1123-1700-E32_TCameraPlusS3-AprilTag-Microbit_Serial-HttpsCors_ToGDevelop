@@ -12,3 +12,11 @@
 venv/
 examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW/02-Ubuntu-Server_Hub/venv/
 
+### jwc 25-1205-0300 auto-start servers & clients
+**/.launch_*.sh
+**/*.backup
+**/*.bak*
+**/*.diff
+**/*.patch
+
+
