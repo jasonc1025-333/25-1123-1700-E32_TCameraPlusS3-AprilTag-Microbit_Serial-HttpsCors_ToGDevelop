@@ -186,7 +186,18 @@
 //    - Lower value = more responsive but higher network load
 //    - Higher value = less responsive but more stable
 //
-const unsigned long AprilTag_Send_INTERVAL_MS = 1500;  // 1.5s (0.67 msg/sec)
+//    PROGRESSIVE TESTING PATH:
+//    Current:  3000ms (0.33/sec) - TOO SLOW ❌
+//    Step 1:   1000ms (1.0/sec)  - BALANCED ✅ START HERE
+//    Step 2:   750ms  (1.33/sec) - RESPONSIVE (if 1000ms works well)
+//    Step 3:   500ms  (2.0/sec)  - FAST (only if no lag at 750ms)
+//
+//// jwc 25-1204-1100 still seems 10-20% laggy const unsigned long AprilTag_Send_INTERVAL_MS = 1500;  // 1.5s (0.67 msg/sec)
+//// jwc 25-1204-1230 seems a little too slow: const unsigned long AprilTag_Send_INTERVAL_MS = 3000;  // 3.0s (0.33 msg/sec)
+//// jwc 25-1204-1300 seems better, so let's try faster: const unsigned long AprilTag_Send_INTERVAL_MS = 1000;  // 1.0s (1.0 msg/sec)
+//// jwc 25-1204-1300 still holding, try faster: const unsigned long AprilTag_Send_INTERVAL_MS = 750;  // 0.75s (1.33 msg/sec)
+const unsigned long AprilTag_Send_INTERVAL_MS = 500;  // 0.5s (2.0 msg/sec)
+
 //    RECOMMENDED VALUES:
 //      500ms  = 2.0 msg/sec (FAST - for gaming/real-time control)
 //      1000ms = 1.0 msg/sec (BALANCED - good responsiveness)
@@ -229,7 +240,10 @@ const char* WIFI_PASSWORD = "Jesus333!";
 // ============================================================================
 
 // * Private Ip ~ LAN
-const char* WS_HOST = "10.0.0.149";  // Ubuntu server IP  
+//// jwc 25-1204-1630 yyy const char* WS_HOST = "10.0.0.149";  // Ubuntu server IP  
+
+// * Public Ip - WAN via Port-Forward
+const char* WS_HOST = "76.102.42.17";  // Ubuntu server IP  
 
 //// jwc 25-1203-0050 // * Public Ip ~ Port-Forward
 //// jwc 25-1203-0050 const char* WS_HOST = "76.102.42.17";  // Ubuntu server IP  
@@ -244,6 +258,7 @@ const bool WS_USE_SSL = false;  // false = ws://, true = wss://
 WebSocketsClient webSocket;
 bool webSocketConnected = false;
 unsigned long totalMessagesSent = 0;
+unsigned long totalMessagesCaptured = 0;  // Total AprilTags captured (added to queue)
 unsigned long totalReconnects = 0;
 
 // Helper function for formatted output
@@ -274,6 +289,9 @@ struct tagData_Struct {
 tagData_Struct tagData_Queue[tagData_MAX];
 int list_head = 0;   // Write position
 int list_count = 0;  // Number of events in list
+
+//// jwc 25-1121-1700 Forward declaration for gfx (defined later in file)
+extern Arduino_TFT *gfx;
 
 //// jwc 25-1126-2200 OPTION 2: GET Server (ARCHIVED)
 //// jwc 25-1126-2200 AsyncWebServer server(80);
@@ -319,9 +337,16 @@ void listTagEvent_Add(int id, float yaw, float pitch, float roll, float x_cm, fl
         tagData_Queue[list_head] = {id, yaw, pitch, roll, x_cm, y_cm, z_cm, tag_size_percent, distance_cm, timestamp};
         list_head = (list_head + 1) % tagData_MAX;
         list_count++;
+        totalMessagesCaptured++;  // Increment capture counter
+        
+        // Update TFT display - bottom-left in YELLOW (Total captured counter)
+        gfx->setTextSize(2);
+        gfx->setTextColor(YELLOW);
+        gfx->setCursor(1, 220);  // Bottom-left corner
+        gfx->printf("Cap:%lu", totalMessagesCaptured);
         
         #if DEBUG >= 1
-        printf("*** ADDED TO LIST: Tag ID=%d, List=%d/%d\n", id, list_count, tagData_MAX);
+        printf("*** ADDED TO LIST: Tag ID=%d, List=%d/%d, Captured=%lu\n", id, list_count, tagData_MAX, totalMessagesCaptured);
         #endif
     } else {
         printf("*** LIST FULL! Dropped Tag ID=%d\n", id);
@@ -537,9 +562,6 @@ struct LatestTagData {
     char camera_name[32] = "";
     unsigned long timestamp = 0;
 } latest_tag;
-
-//// jwc 25-1121-1700 Forward declaration for gfx (defined later in file)
-extern Arduino_TFT *gfx;
 
 //// jwc 25-1124-1700 WiFi and HTTP Server Setup
 
@@ -797,10 +819,17 @@ bool sendAprilTagDataWebSocket(int tag_id, const char* camera_name, float yaw, f
         printf("🔵<<-- SEND: apriltag_data (#%lu) | ID=%d Pos=(%.1f,%.1f,%.1f)cm Yaw=%.1f° [%lums] | JSON=%s\n", 
                totalMessagesSent, tag_id, x_cm, y_cm, z_cm, yaw, send_duration, json.c_str());
         
-        // Update TFT display
+        // Update TFT display - top-right (WebSocket status)
         gfx->setTextSize(1);
         gfx->setCursor(180, 1);
         gfx->printf("WS:%lu", totalMessagesSent);
+        
+        // Update TFT display - bottom-right in YELLOW (Total sent counter)
+        // Display area is 240x240, text size 2, position at bottom-right
+        gfx->setTextSize(2);
+        gfx->setTextColor(YELLOW);
+        gfx->setCursor(130, 220);  // Bottom-right corner
+        gfx->printf("Sent:%lu", totalMessagesSent);
         
         return true;
     } else {
@@ -1287,8 +1316,32 @@ void loop()
             //// jwc yy gfx->draw16bitBeRGBBitmap(0, 0, (uint16_t *)frame->buf, frame->width, frame->height);
             //// jwc n gfx->drawGrayscaleBitmap(0, 0, (uint16_t *)frame->buf, frame->width, frame->height);
             gfx->drawGrayscaleBitmap(0, 0, (uint8_t *)frame->buf, frame->width, frame->height);
+            
+            // ========================================================================
+            // PERSISTENT HUD - Display counters on EVERY frame (all in YELLOW)
+            // ========================================================================
+            
+            // Upper-right: Captured/Sent ratio in yellow (text size 2)
+            gfx->setTextSize(2);
+            gfx->setTextColor(YELLOW);
+            gfx->setCursor(120, 1);
+            gfx->printf("%lu/%lu", totalMessagesCaptured, totalMessagesSent);
+            
+            // Bottom-left: Max capture rate (based on LIST_ADD_INTERVAL_MS)
+            float max_capture_rate = 1000.0 / LIST_ADD_INTERVAL_MS;  // Converts ms to Hz
+            gfx->setTextSize(2);
+            gfx->setTextColor(YELLOW);
+            gfx->setCursor(1, 220);
+            gfx->printf("C:%.1f/s", max_capture_rate);
+            
+            // Bottom-right: Max send rate (based on AprilTag_Send_INTERVAL_MS)
+            float max_send_rate = 1000.0 / AprilTag_Send_INTERVAL_MS;  // Converts ms to Hz
+            gfx->setTextSize(2);
+            gfx->setTextColor(YELLOW);
+            gfx->setCursor(130, 220);
+            gfx->printf("S:%.2f/s", max_send_rate);
 
-            //// \/ jwc 25-0411-1800 convert to April-Tag Detect 
+            //// \/ jwc 25-0411-1800 convert to April-Tag Detect
 
             // Convert our framebuffer to detector's input format
             #if DEBUG >= 3
