@@ -16,26 +16,27 @@ chmod +x 00B-Run_Me.sh
 
 The script automatically:
 
-1. ✅ **Checks prerequisites** (Python3, PlatformIO, gnome-terminal)
-2. ✅ **Sets up Python virtual environment** (if needed)
-3. ✅ **Installs dependencies** (Flask, Flask-CORS, simple-websocket)
-4. 🖥️ **Launches Ubuntu Server** in separate terminal with debug output
+1. ✅ **Checks prerequisites** (Python3, gnome-terminal)
+2. ✅ **Sets up virtual environments** (Server + ESP32/PlatformIO)
+3. 🖥️ **Launches Ubuntu WebSocket Server** (port 5000) in separate terminal
+4. 🎮 **Launches GDevelop Game Server** (port 5100) in separate terminal
 5. 📱 **Uploads ESP32 code** and starts serial monitor in separate terminal
 
 ### What You'll See
 
-After running the script, you'll have **3 windows**:
+After running the script, you'll have **4 windows**:
 
 1. **Main terminal** - Script status and summary
-2. **Ubuntu WebSocket Server** terminal - Server debug prints
-3. **ESP32 Serial Monitor** terminal - ESP32 debug prints
+2. **Ubuntu WebSocket Server** terminal - WebSocket server debug prints (port 5000)
+3. **GDevelop Game Server** terminal - HTTP server for game (port 5100)
+4. **ESP32 Serial Monitor** terminal - ESP32 upload and debug prints
 
 ### System Architecture
 
 ```
 ┌─────────────────┐      WebSocket       ┌─────────────────┐
 │   ESP32 Client  │ ◄──────────────────► │  Ubuntu Server  │
-│  (T-Camera S3)  │  ws://10.0.0.149:5000│   (Python Hub)  │
+│  (T-Camera S3)  │  ws://10.0.0.149:5000│   (WebSocket)   │
 └─────────────────┘                      └─────────────────┘
         │                                         │
         │ HTTP (Video)                            │ WebSocket
@@ -43,10 +44,25 @@ After running the script, you'll have **3 windows**:
         └─────────────────────────────────────────┤
                                                   │
                                           ┌───────▼────────┐
-                                          │ GDevelop Client│
-                                          │  (Web Browser) │
+                                          │ GDevelop Game  │
+                                          │ localhost:5100 │
                                           └────────────────┘
 ```
+
+### Virtual Environments (Isolated Setup)
+
+The script creates isolated virtual environments:
+- **Python Server venv**: Flask, Flask-CORS, simple-websocket
+- **ESP32/PlatformIO venv**: PlatformIO with compatible click==7.1.2
+
+**Benefits:**
+- ✅ No system-wide package modifications
+- ✅ Fully portable (works on any Ubuntu 22 machine)
+- ✅ Auto-setup on first run (~2-3 minutes, instant after)
+- ✅ Fixes PlatformIO compatibility issues
+
+**First Run:** Takes 2-3 minutes to create venvs and install packages (~550MB)  
+**Subsequent Runs:** Instant startup
 
 ## Manual Startup (Alternative)
 
@@ -62,19 +78,21 @@ pip install flask flask-cors simple-websocket
 python3 02-ubuntu_server_websocket-NOW.py
 ```
 
-### 2. Upload & Monitor ESP32
+### 2. Start GDevelop Game Server
 
 ```bash
-# From project root
-pio run -e lilygo-t-camera-plus-s3 --target upload
-pio device monitor -e lilygo-t-camera-plus-s3
+cd ../../11k-25-1202-1330--25-1127-0950-E32_SmartCam-ToUbuntuServerHub-ToGdevelop-WebSocket-NOW/export-Jwc--Gdevelop_Html_Server-NOW/
+python3 -m http.server 5100
+# Open browser: http://localhost:5100
 ```
 
-### 3. Open GDevelop Client
+### 3. Upload & Monitor ESP32
 
 ```bash
-cd 03-GDevelop-Client/
-# Open 03A-Gdevelop-Client-Test.html in browser
+# From project root (activate venv first)
+source examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW/01-Esp32-Client/venv/bin/activate
+pio run -e Camera_Screen_AprilTag__Serial_With_Microbit-NOW__Esp32_Client_Websocket --target upload
+pio device monitor -e Camera_Screen_AprilTag__Serial_With_Microbit-NOW__Esp32_Client_Websocket
 ```
 
 ## Configuration
@@ -160,11 +178,18 @@ sudo kill -9 <PID>
 
 ## Quick Reference
 
-| Component | Port | Protocol |
-|-----------|------|----------|
-| WebSocket Server | 5000 | ws:// |
-| Video Stream | 5000 | http:// |
-| Serial Monitor | varies | USB |
+| Component | Port | Protocol | Access |
+|-----------|------|----------|--------|
+| WebSocket Server | 5000 | ws:// | ws://localhost:5000/websocket |
+| Video Stream | 5000 | http:// | http://localhost:5000/video_stream |
+| GDevelop Game | 6000 | http:// | http://localhost:5100 |
+| Serial Monitor | varies | USB | (via PlatformIO) |
+
+## Port Configuration
+
+- **Port 5000**: Ubuntu WebSocket Server (AprilTag data + video stream)
+- **Port 6000**: GDevelop Game Server (HTTP server for game files)
+- **ESP32**: USB serial connection (variable COM port)
 
 ## Getting Help
 

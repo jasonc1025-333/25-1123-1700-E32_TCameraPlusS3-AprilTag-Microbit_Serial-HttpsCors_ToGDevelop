@@ -1,3 +1,5 @@
+### jwc 25-1123
+
 .pio
 .vscode
 ### jwc 25-1123-1920 Still wish to track: libraries/Apriltag_library_for_Arduino_ESP32
@@ -9,14 +11,24 @@
 99Z-ARCHIVE-BAD/*
 
 ### venv/
+###
 venv/
 examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW/02-Ubuntu-Server_Hub/venv/
 
 ### jwc 25-1205-0300 auto-start servers & clients
+###
 **/.launch_*.sh
 **/*.backup
 **/*.bak*
 **/*.diff
 **/*.patch
 
+### jwc 25-1205-1520 Ignore unzipped export folders but keep zip files
+###
+# Ignore directories that start with 'export-'
+**/export*/
+# But force-track any export zip files
+!**/export*.zip
+# But force-track any export Suffix_'NOW'folder for current hosting
+!**/export*NOW.zip
 

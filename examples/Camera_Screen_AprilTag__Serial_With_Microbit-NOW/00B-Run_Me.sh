@@ -65,10 +65,113 @@ echo -e "${BLUE}║      ESP32 Smart Camera System - Auto Startup Script        
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
 echo ""
 
+# Display system information
+echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}  WHAT YOU'LL SEE${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+echo "After running this script, you'll have 4 windows:"
+echo ""
+echo "  1. Main terminal - Script status and summary"
+echo "  2. Ubuntu WebSocket Server - WebSocket debug prints (port 5000)"
+echo "  3. GDevelop Game Server - HTTP server for game (port 5100)"
+echo "  4. ESP32 Serial Monitor - ESP32 upload and debug prints"
+echo ""
+
+echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}  SYSTEM ARCHITECTURE${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+echo "┌─────────────────┐      WebSocket       ┌─────────────────┐"
+echo "│   ESP32 Client  │ ◄──────────────────► │  Ubuntu Server  │"
+echo "│  (T-Camera S3)  │  ws://10.0.0.149:5000│   (WebSocket)   │"
+echo "└─────────────────┘                      └─────────────────┘"
+echo "        │                                         │"
+echo "        │ HTTP (Video)                            │ WebSocket"
+echo "        │ http://10.0.0.149:5000/video            │"
+echo "        └─────────────────────────────────────────┤"
+echo "                                                  │"
+echo "                                          ┌───────▼────────┐"
+echo "                                          │ GDevelop Game  │"
+echo "                                          │ localhost:5100 │"
+echo "                                          └────────────────┘"
+echo ""
+
+echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}  QUICK REFERENCE${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+echo "Port Configuration:"
+echo "  • Port 5000: Ubuntu WebSocket Server (AprilTag + video)"
+echo "  • Port 5100: GDevelop Game Server"
+echo "  • USB: ESP32 Serial Monitor"
+echo ""
+echo "Access URLs:"
+echo "  • WebSocket: ws://localhost:5000/websocket"
+echo "  • Video Stream: http://localhost:5000/video_stream"
+echo "  • GDevelop Game: http://localhost:5100"
+echo ""
+
+echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}  CONFIGURATION FILES${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+echo "WiFi Settings (ESP32):"
+echo "  File: 01-Esp32-Client/01B-Camera_Screen_AprilTag__Serial_With_Microbit-HttpToWebsocket-NOW.ino.cpp"
+echo "  • WIFI_SSID = \"Chan-Comcast\""
+echo "  • WIFI_PASSWORD = \"Jesus333!\""
+echo ""
+echo "Server IP (ESP32):"
+echo "  • WS_HOST = \"10.0.0.149\""
+echo ""
+echo "Timing (ESP32):"
+echo "  • AprilTag_Send_INTERVAL_MS = 1500 (1.5s, 0.67 msg/sec)"
+echo "  • VideoFrame_Send_INTERVAL_MS = 3000 (3s, 0.33 FPS)"
+echo ""
+
+echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}  COMMON ISSUES & SOLUTIONS${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+echo "ESP32 Upload Fails:"
+echo "  • Check USB connection"
+echo "  • Verify COM port in PlatformIO"
+echo "  • Try pressing BOOT button during upload"
+echo ""
+echo "Port 5000 Already in Use:"
+echo "  • sudo lsof -i :5000"
+echo "  • sudo kill -9 <PID>"
+echo ""
+echo "WiFi Connection Failed:"
+echo "  • Verify SSID and password"
+echo "  • Ensure 2.4GHz WiFi band (ESP32-S3 limitation)"
+echo "  • Check router is not blocking device"
+echo ""
+echo "WebSocket Connection Refused:"
+echo "  • Verify Ubuntu server is running"
+echo "  • Check firewall settings"
+echo "  • Confirm IP address is correct"
+echo ""
+
+echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${BLUE}  PERFORMANCE TIPS${NC}"
+echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+echo "  • Lower latency: AprilTag_Send_INTERVAL_MS = 500ms"
+echo "  • More stability: AprilTag_Send_INTERVAL_MS = 2000ms"
+echo "  • Faster video: VideoFrame_Send_INTERVAL_MS = 1000ms (may lag)"
+echo "  • Better quality: Increase VIDEO_JPEG_QUALITY (1-100)"
+echo ""
+
+echo -e "${BLUE}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+echo -e "${YELLOW}Press Enter to start system setup...${NC}"
+read
+
 # ============================================================================
 # Step 1: Check Prerequisites
 # ============================================================================
-echo -e "${YELLOW}[1/5] Checking prerequisites...${NC}"
+echo -e "${YELLOW}[1/6] Checking prerequisites...${NC}"
 
 # Check for gnome-terminal
 if ! command -v gnome-terminal &> /dev/null; then
@@ -89,7 +192,7 @@ echo ""
 # ============================================================================
 # Step 2: Setup Python Virtual Environments
 # ============================================================================
-echo -e "${YELLOW}[2/5] Setting up Python virtual environments...${NC}"
+echo -e "${YELLOW}[2/6] Setting up Python virtual environments...${NC}"
 
 # Server venv
 VENV_DIR="$SCRIPT_DIR/02-Ubuntu-Server_Hub/venv"
@@ -138,7 +241,7 @@ echo ""
 # ============================================================================
 # Step 3: Start Ubuntu Server in New Terminal
 # ============================================================================
-echo -e "${YELLOW}[3/5] Starting Ubuntu Server...${NC}"
+echo -e "${YELLOW}[3/6] Starting Ubuntu Server...${NC}"
 
 SERVER_SCRIPT="$SCRIPT_DIR/02-Ubuntu-Server_Hub/02-ubuntu_server_websocket-NOW.py"
 
@@ -183,9 +286,64 @@ echo "Waiting 3 seconds for server to start..."
 sleep 3
 
 # ============================================================================
+# Step 3.5: Start GDevelop Game Server in New Terminal
+# ============================================================================
+echo -e "${YELLOW}[3.5/6] Starting GDevelop Game Server...${NC}"
+
+GDEVELOP_DIR="$PROJECT_ROOT/11k-25-1202-1330--25-1127-0950-E32_SmartCam-ToUbuntuServerHub-ToGdevelop-WebSocket-NOW/export-Jwc--Gdevelop_Html_Server-NOW"
+
+if [ ! -d "$GDEVELOP_DIR" ]; then
+    echo -e "${RED}ERROR: GDevelop directory not found at $GDEVELOP_DIR${NC}"
+    echo "Skipping GDevelop server..."
+else
+    # Create a launcher script for GDevelop game
+    GDEVELOP_LAUNCHER="$GDEVELOP_DIR/.launch_gdevelop.sh"
+    cat > "$GDEVELOP_LAUNCHER" << 'EOF'
+#!/bin/bash
+GDEVELOP_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+cd "$GDEVELOP_DIR"
+
+echo "=========================================="
+echo "   GDevelop Game Server - Starting"
+echo "=========================================="
+echo ""
+echo "Directory: $GDEVELOP_DIR"
+echo "Port: 5100"
+echo ""
+echo "Access game at: http://localhost:5100"
+echo ""
+
+python3 -m http.server 5100
+
+echo ""
+echo "Server stopped. Press Enter to close..."
+read
+EOF
+
+    chmod +x "$GDEVELOP_LAUNCHER"
+
+    # Launch GDevelop in new terminal
+    env -i HOME="$HOME" USER="$USER" PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+        DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" \
+        XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+        DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" \
+        gnome-terminal --title="GDevelop Game Server" \
+                       --geometry=80x20+0+400 \
+                       -- bash -c "$GDEVELOP_LAUNCHER" &
+
+    echo -e "${GREEN}✓ GDevelop Game Server launched in separate terminal${NC}"
+    echo -e "${GREEN}  Access game at: http://localhost:5100${NC}"
+    echo ""
+    
+    # Wait a moment for game server to start
+    sleep 1
+fi
+
+# ============================================================================
 # Step 4: Upload ESP32 Code & Start Serial Monitor
 # ============================================================================
-echo -e "${YELLOW}[4/5] Starting ESP32 Client...${NC}"
+echo -e "${YELLOW}[4/6] Starting ESP32 Client...${NC}"
 
 ESP32_ENV="Camera_Screen_AprilTag__Serial_With_Microbit-NOW__Esp32_Client_Websocket"
 
@@ -259,13 +417,15 @@ echo -e "${BLUE}╚════════════════════�
 echo ""
 echo -e "${GREEN}✓ Python Server venv:${NC} $VENV_DIR"
 echo -e "${GREEN}✓ PlatformIO venv:${NC} $ESP32_VENV_DIR"
-echo -e "${GREEN}✓ Ubuntu Server:${NC} Running in separate terminal"
+echo -e "${GREEN}✓ Ubuntu WebSocket Server:${NC} Running on port 5000"
+echo -e "${GREEN}✓ GDevelop Game Server:${NC} Running on port 6000 (http://localhost:5100)"
 echo -e "${GREEN}✓ ESP32 Client:${NC} Uploading code & starting monitor"
 echo ""
 echo -e "${YELLOW}Next Steps:${NC}"
 echo "1. Check Ubuntu Server terminal for WebSocket server startup"
-echo "2. Check ESP32 terminal for upload progress and serial output"
-echo "3. Both terminals will show debug prints in real-time"
+echo "2. Open browser: http://localhost:5100 to play GDevelop game"
+echo "3. Check ESP32 terminal for upload progress and serial output"
+echo "4. All terminals will show debug prints in real-time"
 echo ""
 echo -e "${YELLOW}Troubleshooting:${NC}"
 echo "- If ESP32 upload fails, check USB connection"
