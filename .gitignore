@@ -29,6 +29,9 @@ examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW/02-Ubuntu-Server_Hub/v
 **/export*/
 # But force-track any export zip files
 !**/export*.zip
+### jwc y # But force-track the current GDevelop game server folder
+### jwc y !11k-25-1202-1330--25-1127-0950-E32_SmartCam-ToUbuntuServerHub-ToGdevelop-WebSocket-NOW/export-Jwc--Gdevelop_Html_Server-NOW/
+### jwc y !11k-25-1202-1330--25-1127-0950-E32_SmartCam-ToUbuntuServerHub-ToGdevelop-WebSocket-NOW/export-Jwc--Gdevelop_Html_Server-NOW/**
 # But force-track any export Suffix_'NOW'folder for current hosting
-!**/export*NOW.zip
+!**/export*NOW
 
