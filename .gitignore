@@ -8,6 +8,9 @@
 ###
 *.json.autosave
 *.JSO.autosave
+
+### jwc 25-1207-1140 Large snapshot files that exceed GitHub's 100MB limit
+12i-LilyGo-AMOLED-Series-SNAPSHOT-*.zip
 ### jwc 25-1207-0900 
 ###
 ### KWC 25-1207-0920 \/\/ 9Z-ARCHIVE-BAD/*
