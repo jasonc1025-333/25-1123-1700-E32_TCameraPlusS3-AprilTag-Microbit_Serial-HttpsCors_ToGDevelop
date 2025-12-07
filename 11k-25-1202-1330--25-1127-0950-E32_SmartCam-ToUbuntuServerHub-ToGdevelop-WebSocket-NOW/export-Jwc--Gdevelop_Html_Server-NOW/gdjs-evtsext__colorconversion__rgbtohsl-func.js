@@ -9,7 +9,7 @@ gdjs.evtsExt__ColorConversion__RgbToHsl = {};
 gdjs.evtsExt__ColorConversion__RgbToHsl.idToCallbackMap = new Map();
 
 
-gdjs.evtsExt__ColorConversion__RgbToHsl.userFunc0xa4b948 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
+gdjs.evtsExt__ColorConversion__RgbToHsl.userFunc0x1236ee8 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
 "use strict";
 const n = eventsFunctionContext.getArgument("n");
 const col = n.split(";");
@@ -37,7 +37,7 @@ gdjs.evtsExt__ColorConversion__RgbToHsl.eventsList0 = function(runtimeScene, eve
 {
 
 
-gdjs.evtsExt__ColorConversion__RgbToHsl.userFunc0xa4b948(runtimeScene, eventsFunctionContext);
+gdjs.evtsExt__ColorConversion__RgbToHsl.userFunc0x1236ee8(runtimeScene, eventsFunctionContext);
 
 }
 

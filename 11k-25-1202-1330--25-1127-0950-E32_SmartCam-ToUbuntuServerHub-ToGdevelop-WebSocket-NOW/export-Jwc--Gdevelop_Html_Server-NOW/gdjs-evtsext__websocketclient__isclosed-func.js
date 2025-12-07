@@ -9,7 +9,7 @@ gdjs.evtsExt__WebSocketClient__IsClosed = {};
 gdjs.evtsExt__WebSocketClient__IsClosed.idToCallbackMap = new Map();
 
 
-gdjs.evtsExt__WebSocketClient__IsClosed.userFunc0xad5330 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
+gdjs.evtsExt__WebSocketClient__IsClosed.userFunc0x1382908 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
 "use strict";
 eventsFunctionContext.returnValue =
     gdjs.evtTools.wsClient.connection &&
@@ -21,7 +21,7 @@ gdjs.evtsExt__WebSocketClient__IsClosed.eventsList0 = function(runtimeScene, eve
 {
 
 
-gdjs.evtsExt__WebSocketClient__IsClosed.userFunc0xad5330(runtimeScene, eventsFunctionContext);
+gdjs.evtsExt__WebSocketClient__IsClosed.userFunc0x1382908(runtimeScene, eventsFunctionContext);
 
 }
 

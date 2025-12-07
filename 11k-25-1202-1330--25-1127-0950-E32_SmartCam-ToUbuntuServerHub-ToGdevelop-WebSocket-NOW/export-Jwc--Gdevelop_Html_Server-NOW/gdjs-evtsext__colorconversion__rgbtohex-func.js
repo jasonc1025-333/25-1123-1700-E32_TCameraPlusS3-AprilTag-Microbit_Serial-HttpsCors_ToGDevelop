@@ -9,7 +9,7 @@ gdjs.evtsExt__ColorConversion__RgbToHex = {};
 gdjs.evtsExt__ColorConversion__RgbToHex.idToCallbackMap = new Map();
 
 
-gdjs.evtsExt__ColorConversion__RgbToHex.userFunc0xa48270 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
+gdjs.evtsExt__ColorConversion__RgbToHex.userFunc0x1236ca0 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
 "use strict";
 try {
     const n = eventsFunctionContext.getArgument("n");
@@ -34,7 +34,7 @@ gdjs.evtsExt__ColorConversion__RgbToHex.eventsList0 = function(runtimeScene, eve
 {
 
 
-gdjs.evtsExt__ColorConversion__RgbToHex.userFunc0xa48270(runtimeScene, eventsFunctionContext);
+gdjs.evtsExt__ColorConversion__RgbToHex.userFunc0x1236ca0(runtimeScene, eventsFunctionContext);
 
 }
 

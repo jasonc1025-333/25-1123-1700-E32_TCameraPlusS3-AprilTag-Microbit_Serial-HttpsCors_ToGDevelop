@@ -9,7 +9,7 @@ gdjs.evtsExt__WebSocketClient__Send = {};
 gdjs.evtsExt__WebSocketClient__Send.idToCallbackMap = new Map();
 
 
-gdjs.evtsExt__WebSocketClient__Send.userFunc0xad5330 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
+gdjs.evtsExt__WebSocketClient__Send.userFunc0x1387d90 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
 "use strict";
 gdjs.evtTools.wsClient.connection &&
     gdjs.evtTools.wsClient.connection.send(eventsFunctionContext.getArgument("data"));
@@ -20,7 +20,7 @@ gdjs.evtsExt__WebSocketClient__Send.eventsList0 = function(runtimeScene, eventsF
 {
 
 
-gdjs.evtsExt__WebSocketClient__Send.userFunc0xad5330(runtimeScene, eventsFunctionContext);
+gdjs.evtsExt__WebSocketClient__Send.userFunc0x1387d90(runtimeScene, eventsFunctionContext);
 
 }
 

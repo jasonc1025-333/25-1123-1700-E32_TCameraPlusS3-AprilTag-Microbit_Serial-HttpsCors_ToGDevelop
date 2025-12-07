@@ -9,7 +9,7 @@ gdjs.evtsExt__WebSocketClient__Disconnect = {};
 gdjs.evtsExt__WebSocketClient__Disconnect.idToCallbackMap = new Map();
 
 
-gdjs.evtsExt__WebSocketClient__Disconnect.userFunc0xad5330 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
+gdjs.evtsExt__WebSocketClient__Disconnect.userFunc0x1382528 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
 "use strict";
 gdjs.evtTools.wsClient.connection
     && gdjs.evtTools.wsClient.connection.close(1000, eventsFunctionContext.getArgument("reason"));
@@ -20,7 +20,7 @@ gdjs.evtsExt__WebSocketClient__Disconnect.eventsList0 = function(runtimeScene, e
 {
 
 
-gdjs.evtsExt__WebSocketClient__Disconnect.userFunc0xad5330(runtimeScene, eventsFunctionContext);
+gdjs.evtsExt__WebSocketClient__Disconnect.userFunc0x1382528(runtimeScene, eventsFunctionContext);
 
 }
 

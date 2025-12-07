@@ -9,7 +9,7 @@ gdjs.evtsExt__ColorConversion__HexToLuminance = {};
 gdjs.evtsExt__ColorConversion__HexToLuminance.idToCallbackMap = new Map();
 
 
-gdjs.evtsExt__ColorConversion__HexToLuminance.userFunc0xa43368 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
+gdjs.evtsExt__ColorConversion__HexToLuminance.userFunc0x1236e60 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
 "use strict";
 function hexToLuminance(color) {
     // Convert the color string to an array of RGB values
@@ -26,7 +26,7 @@ gdjs.evtsExt__ColorConversion__HexToLuminance.eventsList0 = function(runtimeScen
 {
 
 
-gdjs.evtsExt__ColorConversion__HexToLuminance.userFunc0xa43368(runtimeScene, eventsFunctionContext);
+gdjs.evtsExt__ColorConversion__HexToLuminance.userFunc0x1236e60(runtimeScene, eventsFunctionContext);
 
 }
 

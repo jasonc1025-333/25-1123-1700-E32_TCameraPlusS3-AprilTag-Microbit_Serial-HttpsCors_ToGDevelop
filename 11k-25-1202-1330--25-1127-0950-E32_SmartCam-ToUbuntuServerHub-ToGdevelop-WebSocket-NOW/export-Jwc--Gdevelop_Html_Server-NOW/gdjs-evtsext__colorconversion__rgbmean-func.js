@@ -9,7 +9,7 @@ gdjs.evtsExt__ColorConversion__RgbMean = {};
 gdjs.evtsExt__ColorConversion__RgbMean.idToCallbackMap = new Map();
 
 
-gdjs.evtsExt__ColorConversion__RgbMean.userFunc0xa456f0 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
+gdjs.evtsExt__ColorConversion__RgbMean.userFunc0x1236cd8 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
 "use strict";
 try {
     // split do allocations, but the code a lot simpler this way.
@@ -39,7 +39,7 @@ gdjs.evtsExt__ColorConversion__RgbMean.eventsList0 = function(runtimeScene, even
 {
 
 
-gdjs.evtsExt__ColorConversion__RgbMean.userFunc0xa456f0(runtimeScene, eventsFunctionContext);
+gdjs.evtsExt__ColorConversion__RgbMean.userFunc0x1236cd8(runtimeScene, eventsFunctionContext);
 
 }
 

@@ -9,7 +9,7 @@ gdjs.evtsExt__WebSocketClient__Data = {};
 gdjs.evtsExt__WebSocketClient__Data.idToCallbackMap = new Map();
 
 
-gdjs.evtsExt__WebSocketClient__Data.userFunc0xad5330 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
+gdjs.evtsExt__WebSocketClient__Data.userFunc0x1381fa8 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
 "use strict";
 eventsFunctionContext.returnValue =
     gdjs.evtTools.wsClient.events[gdjs.evtTools.wsClient.events.length - 1] || "";
@@ -20,7 +20,7 @@ gdjs.evtsExt__WebSocketClient__Data.eventsList0 = function(runtimeScene, eventsF
 {
 
 
-gdjs.evtsExt__WebSocketClient__Data.userFunc0xad5330(runtimeScene, eventsFunctionContext);
+gdjs.evtsExt__WebSocketClient__Data.userFunc0x1381fa8(runtimeScene, eventsFunctionContext);
 
 }
 

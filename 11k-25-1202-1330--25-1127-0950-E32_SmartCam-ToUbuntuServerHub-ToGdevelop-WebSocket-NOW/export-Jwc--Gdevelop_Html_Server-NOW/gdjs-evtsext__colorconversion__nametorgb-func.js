@@ -9,7 +9,7 @@ gdjs.evtsExt__ColorConversion__NameToRgb = {};
 gdjs.evtsExt__ColorConversion__NameToRgb.idToCallbackMap = new Map();
 
 
-gdjs.evtsExt__ColorConversion__NameToRgb.userFunc0xa513a0 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
+gdjs.evtsExt__ColorConversion__NameToRgb.userFunc0x1236ee8 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
 "use strict";
 let n = eventsFunctionContext.getArgument("n");
 
@@ -458,7 +458,7 @@ gdjs.evtsExt__ColorConversion__NameToRgb.eventsList0 = function(runtimeScene, ev
 {
 
 
-gdjs.evtsExt__ColorConversion__NameToRgb.userFunc0xa513a0(runtimeScene, eventsFunctionContext);
+gdjs.evtsExt__ColorConversion__NameToRgb.userFunc0x1236ee8(runtimeScene, eventsFunctionContext);
 
 }
 

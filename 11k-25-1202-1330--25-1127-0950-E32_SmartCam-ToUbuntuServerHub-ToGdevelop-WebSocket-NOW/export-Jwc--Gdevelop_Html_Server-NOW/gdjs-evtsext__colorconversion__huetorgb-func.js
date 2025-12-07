@@ -9,7 +9,7 @@ gdjs.evtsExt__ColorConversion__HueToRgb = {};
 gdjs.evtsExt__ColorConversion__HueToRgb.idToCallbackMap = new Map();
 
 
-gdjs.evtsExt__ColorConversion__HueToRgb.userFunc0xa5ecc8 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
+gdjs.evtsExt__ColorConversion__HueToRgb.userFunc0x1235fc8 = function GDJSInlineCode(runtimeScene, eventsFunctionContext) {
 "use strict";
 try {
     let h = parseFloat(eventsFunctionContext.getArgument("Hue")),
@@ -38,7 +38,7 @@ gdjs.evtsExt__ColorConversion__HueToRgb.eventsList0 = function(runtimeScene, eve
 {
 
 
-gdjs.evtsExt__ColorConversion__HueToRgb.userFunc0xa5ecc8(runtimeScene, eventsFunctionContext);
+gdjs.evtsExt__ColorConversion__HueToRgb.userFunc0x1235fc8(runtimeScene, eventsFunctionContext);
 
 }
 
