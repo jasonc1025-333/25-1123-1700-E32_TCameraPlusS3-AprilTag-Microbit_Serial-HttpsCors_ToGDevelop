@@ -8,7 +8,12 @@
 ###
 *.json.autosave
 *.JSO.autosave
-99Z-ARCHIVE-BAD/*
+### jwc 25-1207-0900 
+###
+### KWC 25-1207-0920 \/\/ 9Z-ARCHIVE-BAD/*
+### KWC 25-1207-0920 \/\/ */99-ARCHIVE-GOOD/*
+**/*ARCHIVE**/
+
 
 ### venv/
 ###
@@ -34,4 +39,3 @@ examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW/02-Ubuntu-Server_Hub/v
 ### jwc y !11k-25-1202-1330--25-1127-0950-E32_SmartCam-ToUbuntuServerHub-ToGdevelop-WebSocket-NOW/export-Jwc--Gdevelop_Html_Server-NOW/**
 # But force-track any export Suffix_'NOW'folder for current hosting
 !**/export*NOW
-
