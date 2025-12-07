@@ -2,6 +2,7 @@
 
 .pio
 .vscode
+
 ### jwc 25-1123-1920 Still wish to track: libraries/Apriltag_library_for_Arduino_ESP32
 
 ### jwc 25-1127-1030 GDevelop:
@@ -9,14 +10,11 @@
 *.json.autosave
 *.JSO.autosave
 
-### jwc 25-1207-1140 Large snapshot files that exceed GitHub's 100MB limit
-12i-LilyGo-AMOLED-Series-SNAPSHOT-*.zip
 ### jwc 25-1207-0900 
 ###
 ### KWC 25-1207-0920 \/\/ 9Z-ARCHIVE-BAD/*
 ### KWC 25-1207-0920 \/\/ */99-ARCHIVE-GOOD/*
 **/*ARCHIVE**/
-
 
 ### venv/
 ###
@@ -42,3 +40,6 @@ examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW/02-Ubuntu-Server_Hub/v
 ### jwc y !11k-25-1202-1330--25-1127-0950-E32_SmartCam-ToUbuntuServerHub-ToGdevelop-WebSocket-NOW/export-Jwc--Gdevelop_Html_Server-NOW/**
 # But force-track any export Suffix_'NOW'folder for current hosting
 !**/export*NOW
+
+### jwc 25-1207-1140 Large snapshot files that exceed GitHub's 100MB limit
+12i-LilyGo-AMOLED-Series-SNAPSHOT-*.zip
