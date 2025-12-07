@@ -143,3 +143,33 @@ Your system now has:
 - ✅ Complete header visibility for troubleshooting
 
 You can now see exactly when and how CORS headers are applied to both the preflight OPTIONS request and the actual GET response!
+
+
+25-1207-1200 Github Issue Resoved via Claude-Sonnet
+
+   Task Completed
+   Successfully resolved Git issues and pushed to GitHub!
+
+   Summary of Actions Taken:
+   Removed Large GDevelop Project Directories from Git Tracking:
+
+   Removed 11k-25-1127-0950--25-0713-1400-E32_SmartCam-ToUbuntuServerHub-ToGdevelop-Http-NOW/
+   Removed 11k-25-1202-1330--25-1127-0950-E32_SmartCam-ToUbuntuServerHub-ToGdevelop-WebSocket-NOW/
+   These directories are now properly ignored via .gitignore patterns
+   Resolved Large ZIP File Issue:
+
+   Added pattern 12i-LilyGo-AMOLED-Series-SNAPSHOT-*.zip to .gitignore
+   Completely removed the 247.80 MB ZIP file from entire Git history using git filter-branch
+   This file exceeded GitHub's 100 MB limit and was blocking all pushes
+   Successfully Pushed to GitHub:
+
+   Force pushed the rewritten Git history to origin
+   All 8,947 objects successfully uploaded (283.99 MiB total)
+   All 3,215 deltas resolved successfully
+   Branch arduino-esp32-libs_V2.0.14 is now up to date on GitHub
+   Notes:
+   The repository URL has been updated by GitHub to: https://github.com/jasonc1025-333/25-1123-1700-E32_TCameraPlusS3-AprilTag-SerialToMicrobit-HttpsCorsToGDevelop.git
+   The large ZIP file remains on your local filesystem but is no longer tracked by Git
+   Future commits will automatically exclude the specified patterns in .gitignore
+
+
