@@ -190,9 +190,76 @@ echo -e "${GREEN}✓ All prerequisites found${NC}"
 echo ""
 
 # ============================================================================
-# Step 2: Setup Python Virtual Environments
+# Step 2: Check and Clear Ports
 # ============================================================================
-echo -e "${YELLOW}[2/6] Setting up Python virtual environments...${NC}"
+echo -e "${YELLOW}[2/7] Checking ports availability...${NC}"
+
+# Function to check if a port is in use and offer to kill the process
+check_and_clear_port() {
+    local port=$1
+    local service_name=$2
+    
+    # Check if port is in use
+    local pid=$(lsof -ti :$port 2>/dev/null)
+    
+    if [ -n "$pid" ]; then
+        echo -e "${YELLOW}⚠️  Port $port is already in use by PID $pid ($service_name)${NC}"
+        
+        # Get process info
+        local process_info=$(ps -p $pid -o comm= 2>/dev/null)
+        echo "   Process: $process_info"
+        
+        # Ask user what to do
+        echo -e "${YELLOW}   Options:${NC}"
+        echo "   1) Kill the process and continue"
+        echo "   2) Skip and continue anyway (may cause conflicts)"
+        echo "   3) Exit script"
+        read -p "   Choose (1/2/3): " choice
+        
+        case $choice in
+            1)
+                echo "   Killing process $pid..."
+                kill -9 $pid 2>/dev/null
+                sleep 1
+                
+                # Verify port is now free
+                local check_pid=$(lsof -ti :$port 2>/dev/null)
+                if [ -z "$check_pid" ]; then
+                    echo -e "${GREEN}   ✓ Port $port is now free${NC}"
+                else
+                    echo -e "${RED}   ERROR: Failed to free port $port${NC}"
+                    exit 1
+                fi
+                ;;
+            2)
+                echo -e "${YELLOW}   ⚠️  Continuing anyway - this may cause conflicts${NC}"
+                ;;
+            3)
+                echo "Exiting script..."
+                exit 0
+                ;;
+            *)
+                echo -e "${RED}   Invalid choice. Exiting...${NC}"
+                exit 1
+                ;;
+        esac
+    else
+        echo -e "${GREEN}✓ Port $port is available ($service_name)${NC}"
+    fi
+}
+
+# Check port 5000 (Ubuntu WebSocket Server)
+check_and_clear_port 5000 "Ubuntu WebSocket Server"
+
+# Check port 5100 (GDevelop Game Server)
+check_and_clear_port 5100 "GDevelop Game Server"
+
+echo ""
+
+# ============================================================================
+# Step 3: Setup Python Virtual Environments
+# ============================================================================
+echo -e "${YELLOW}[3/7] Setting up Python virtual environments...${NC}"
 
 # Server venv
 VENV_DIR="$SCRIPT_DIR/02-Ubuntu-Server_Hub/venv"
@@ -239,9 +306,9 @@ fi
 echo ""
 
 # ============================================================================
-# Step 3: Start Ubuntu Server in New Terminal
+# Step 4: Start Ubuntu Server in New Terminal
 # ============================================================================
-echo -e "${YELLOW}[3/6] Starting Ubuntu Server...${NC}"
+echo -e "${YELLOW}[4/7] Starting Ubuntu Server...${NC}"
 
 SERVER_SCRIPT="$SCRIPT_DIR/02-Ubuntu-Server_Hub/02-ubuntu_server_websocket-NOW.py"
 
@@ -286,9 +353,9 @@ echo "Waiting 3 seconds for server to start..."
 sleep 3
 
 # ============================================================================
-# Step 3.5: Start GDevelop Game Server in New Terminal
+# Step 5: Start GDevelop Game Server in New Terminal
 # ============================================================================
-echo -e "${YELLOW}[3.5/6] Starting GDevelop Game Server...${NC}"
+echo -e "${YELLOW}[5/7] Starting GDevelop Game Server...${NC}"
 
 GDEVELOP_DIR="$PROJECT_ROOT/11k-25-1202-1330--25-1127-0950-E32_SmartCam-ToUbuntuServerHub-ToGdevelop-WebSocket-NOW/export-Jwc--Gdevelop_Html_Server-NOW"
 
@@ -341,9 +408,9 @@ EOF
 fi
 
 # ============================================================================
-# Step 4: Upload ESP32 Code & Start Serial Monitor
+# Step 6: Upload ESP32 Code & Start Serial Monitor
 # ============================================================================
-echo -e "${YELLOW}[4/6] Starting ESP32 Client...${NC}"
+echo -e "${YELLOW}[6/7] Starting ESP32 Client...${NC}"
 
 ESP32_ENV="Camera_Screen_AprilTag__Serial_With_Microbit-NOW__Esp32_Client_Websocket"
 
@@ -409,7 +476,7 @@ echo -e "${GREEN}✓ ESP32 Client launcher started in separate terminal${NC}"
 echo ""
 
 # ============================================================================
-# Step 5: Summary
+# Step 7: Summary
 # ============================================================================
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║                    System Started!                           ║${NC}"
@@ -438,12 +505,15 @@ echo "- Each component has its own isolated dependencies"
 echo "- Safe to copy project to another Ubuntu 22 machine"
 echo "- Script will auto-recreate venvs on new machine"
 echo ""
-echo -e "${BLUE}Press Ctrl+C to exit this script (terminals will keep running)${NC}"
+echo -e "${BLUE}Script complete! Terminals will keep running.${NC}"
+echo -e "${BLUE}Press Ctrl+C to exit this window.${NC}"
 echo ""
 
 # Keep script running so user can see the summary
 # They can Ctrl+C when ready
 trap 'echo ""; echo "Script exited. Terminals are still running."; exit 0' INT
 
-# Optional: Wait for user input to close
-read -p "Press Enter to exit this script (terminals will continue running)..."
+# Wait indefinitely (user exits with Ctrl+C)
+while true; do
+    sleep 1
+done

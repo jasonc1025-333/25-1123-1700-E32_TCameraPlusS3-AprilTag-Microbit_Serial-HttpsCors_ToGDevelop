@@ -209,7 +209,9 @@ const unsigned long AprilTag_Send_INTERVAL_MS = 500;  // 0.5s (2.0 msg/sec)
 //    - This is separate from AprilTag detection which runs continuously
 //    - Video upload is slow, so keep this interval high to avoid blocking
 //
-const unsigned long VideoFrame_Send_INTERVAL_MS = 3000;  // 3s (0.33 FPS)
+//// jwc 25-1206-1400 try decrease frame by 50% and have 1fps: const unsigned long VideoFrame_Send_INTERVAL_MS = 3000;  // 3s (0.33 FPS)
+//// jwc 25-1207-0020 Increase video rate: const unsigned long VideoFrame_Send_INTERVAL_MS = 1000;  // 1s (1.0 FPS)
+const unsigned long VideoFrame_Send_INTERVAL_MS = 500;  // 0.5s (2.0 FPS)
 //    RECOMMENDED VALUES:
 //      3000ms = 0.33 FPS (CURRENT - prevents lag, good for monitoring)
 //      5000ms = 0.20 FPS (VERY SLOW - minimal network impact)
@@ -1067,7 +1069,9 @@ bool OV2640_Initialization(void)
     //// jwc y config.frame_size = FRAMESIZE_240X240;
     //// jwc yy config.frame_size = FRAMESIZE_QVGA;
 
-    config.frame_size = FRAMESIZE_240X240;
+    //// jwc 25-1206-1430 ARCHIVED - was too small on TFT: config.frame_size = FRAMESIZE_QQVGA;  // 160x120 
+    //// jwc 25-1207-0020 Restore full TFT screen size (240x240 easier to see on device):
+    config.frame_size = FRAMESIZE_240X240;  // 240x240 for TFT display, video streamed at low quality
 
     // config.pixel_format = PIXFORMAT_JPEG; // for streaming
     //// jwc 25-0411-1800 oy    config.pixel_format = PIXFORMAT_RGB565; // for face detection/recognition

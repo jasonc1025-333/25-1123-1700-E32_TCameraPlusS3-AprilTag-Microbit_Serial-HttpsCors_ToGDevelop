@@ -102,6 +102,17 @@ latest_apriltag_data = None
 latest_video_frame = None  # Will store (jpeg_bytes, timestamp)
 latest_video_frame_lock = threading.Lock()  # Thread-safe access to video frame
 
+# Video FPS tracking (jwc 25-1206-1430)
+video_frame_timestamps = []  # Last 10 frame timestamps for FPS calculation
+MAX_FPS_SAMPLES = 10
+calculated_fps = 0.0
+video_fps_lock = threading.Lock()  # Thread-safe FPS calculation
+
+# Video frame dimensions tracking (jwc 25-1207-0130)
+actual_frame_width = 0
+actual_frame_height = 0
+frame_dimensions_lock = threading.Lock()
+
 # Legacy FIFO queue (HTTP compatibility)
 tagData_List_Fifo = []
 tagData_List_Fifo_Count_Base1 = 0
@@ -481,20 +492,55 @@ def AprilTag_List_Fifo_Pop():
 @app.route('/client_e32__http_post_to_serverhub__smartcam_video_stream', methods=['POST'])
 def receive_video_frame():
     """Receive and cache video frames from ESP32"""
-    global latest_video_frame
+    global latest_video_frame, calculated_fps, actual_frame_width, actual_frame_height
     
     try:
         # Get JPEG data from request
         jpeg_data = request.get_data()
         
         if jpeg_data and len(jpeg_data) > 0:
+            current_time = time.time()
+            
+            # Extract frame dimensions from JPEG header (jwc 25-1207-0130)
+            # JPEG SOF0 marker format: FF C0 [length] [precision] [height:2bytes] [width:2bytes]
+            try:
+                # Find SOF0 marker (0xFFC0)
+                for i in range(len(jpeg_data) - 10):
+                    if jpeg_data[i] == 0xFF and jpeg_data[i+1] == 0xC0:
+                        # SOF0 found - extract dimensions (big-endian)
+                        height = (jpeg_data[i+5] << 8) | jpeg_data[i+6]
+                        width = (jpeg_data[i+7] << 8) | jpeg_data[i+8]
+                        
+                        with frame_dimensions_lock:
+                            actual_frame_width = width
+                            actual_frame_height = height
+                        break
+            except Exception as e:
+                print(f"⚠️  Could not extract JPEG dimensions: {e}")
+            
             # Store frame with timestamp (thread-safe)
             with latest_video_frame_lock:
-                latest_video_frame = (jpeg_data, time.time())
+                latest_video_frame = (jpeg_data, current_time)
+            
+            # Calculate FPS from timestamps (jwc 25-1206-1430)
+            with video_fps_lock:
+                video_frame_timestamps.append(current_time)
+                if len(video_frame_timestamps) > MAX_FPS_SAMPLES:
+                    video_frame_timestamps.pop(0)
+                
+                if len(video_frame_timestamps) >= 2:
+                    time_span = video_frame_timestamps[-1] - video_frame_timestamps[0]
+                    if time_span > 0:
+                        calculated_fps = (len(video_frame_timestamps) - 1) / time_span
             
             stats['video_frames'] += 1
             
-            print(f"📹 Video frame cached: {len(jpeg_data)} bytes (#{stats['video_frames']})")
+            # Get current dimensions for logging
+            with frame_dimensions_lock:
+                width_log = actual_frame_width
+                height_log = actual_frame_height
+            
+            print(f"📹 Video frame cached: {len(jpeg_data)} bytes {width_log}x{height_log} (#{stats['video_frames']}) FPS={calculated_fps:.2f}")
             
             return jsonify({'status': 'success', 'size': len(jpeg_data)}), 200
         else:
@@ -621,18 +667,22 @@ def video_viewer():
             <div class="stats">
                 <div class="stats-row">
                     <strong>🎥 Resolution:</strong>
-                    <span>240x240 pixels</span>
+                    <span id="resolution">Detecting...</span>
                 </div>
                 <div class="stats-row">
-                    <strong>🔄 Update Rate:</strong>
-                    <span>~0.5 FPS (2 sec interval)</span>
+                    <strong>🎯 Target FPS:</strong>
+                    <span id="targetFps">Calculating...</span>
+                </div>
+                <div class="stats-row">
+                    <strong>⚡ Actual FPS:</strong>
+                    <span id="actualFps">Calculating...</span>
                 </div>
                 <div class="stats-row">
                     <strong>📡 Server:</strong>
                     <span>{SERVER_HOST}:{SERVER_PORT}</span>
                 </div>
                 <div class="stats-row">
-                    <strong>⏱️ Latency:</strong>
+                    <strong>⏱️ Frame Age:</strong>
                     <span id="latency">Calculating...</span>
                 </div>
             </div>
@@ -645,14 +695,48 @@ def video_viewer():
                 img.src = '/photo?t=' + new Date().getTime();
             }}, 2000);
             
-            // Monitor frame age via response headers
-            fetch('/photo')
-                .then(response => {{
-                    const age = response.headers.get('X-Frame-Age');
-                    if (age) {{
-                        document.getElementById('latency').textContent = age;
-                    }}
-                }});
+            // Update all stats every second (jwc 25-1206-1430, enhanced jwc 25-1207-0130)
+            function updateStats() {{
+                // Fetch frame age from headers
+                fetch('/photo')
+                    .then(response => {{
+                        const age = response.headers.get('X-Frame-Age');
+                        if (age) {{
+                            document.getElementById('latency').textContent = age;
+                        }}
+                    }})
+                    .catch(err => console.log('Frame age fetch error:', err));
+                
+                // Fetch ALL dynamic stats from API (FPS, resolution, target FPS)
+                fetch('/video_fps')
+                    .then(response => response.json())
+                    .then(data => {{
+                        // Update resolution
+                        if (data.resolution && data.resolution !== 'Unknown') {{
+                            document.getElementById('resolution').textContent = 
+                                data.resolution + ' pixels';
+                        }} else {{
+                            document.getElementById('resolution').textContent = 'Waiting for frame...';
+                        }}
+                        
+                        // Update target FPS
+                        if (data.target_fps > 0) {{
+                            document.getElementById('targetFps').textContent = 
+                                data.target_fps.toFixed(1) + ' FPS (' + data.interval_ms + 'ms interval)';
+                        }} else {{
+                            document.getElementById('targetFps').textContent = 'Calculating...';
+                        }}
+                        
+                        // Update actual FPS
+                        document.getElementById('actualFps').textContent = 
+                            data.fps.toFixed(2) + ' FPS';
+                    }})
+                    .catch(err => console.log('Stats fetch error:', err));
+            }}
+            
+            // Update stats immediately and then every second
+            updateStats();
+            setInterval(updateStats, 1000);
         </script>
     </body>
     </html>
@@ -779,6 +863,30 @@ def status():
             'esp32_connected': stats['esp32_connected'],
             'gdevelop_clients': stats['gdevelop_clients']
         }
+    })
+
+@app.route('/video_fps')
+def video_fps():
+    """JSON endpoint for video FPS data (jwc 25-1206-1430) and dimensions (jwc 25-1207-0130)"""
+    with video_fps_lock:
+        current_fps = calculated_fps
+    
+    with frame_dimensions_lock:
+        width = actual_frame_width
+        height = actual_frame_height
+    
+    # CONFIGURED target values from ESP32 code (VideoFrame_Send_INTERVAL_MS = 500ms)
+    # These are the CONSTANT settings, not measured values
+    TARGET_INTERVAL_MS = 500  # From ESP32: const unsigned long VideoFrame_Send_INTERVAL_MS = 500
+    TARGET_FPS = 1000.0 / TARGET_INTERVAL_MS  # 1000ms / 500ms = 2.0 FPS
+    
+    return jsonify({
+        'fps': round(current_fps, 2),
+        'target_fps': round(TARGET_FPS, 1),
+        'interval_ms': TARGET_INTERVAL_MS,
+        'width': width,
+        'height': height,
+        'resolution': f'{width}x{height}' if width > 0 and height > 0 else 'Unknown'
     })
 
 # ============================================================================
