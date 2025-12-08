@@ -1,3 +1,31 @@
+//// ============================================================================
+//// CRITICAL FIX - HTTP TIMEOUT & WEBSOCKET STABILITY (jwc 25-1207-2000)
+//// ============================================================================
+//// 
+//// __1 second timeout means:__
+//// 
+//// - Video attempt every 5 seconds
+//// - HTTP fails quickly (1s instead of 5s)
+//// - __4 seconds of breathing room__ for WebSocket
+//// - WebSocket can handle pings/AprilTag data reliably ✅
+//// 
+//// ### 📊 Timeline Example:
+//// 
+//// ```
+//// Time 0s:  Video upload starts
+//// Time 1s:  HTTP times out (FAST FAIL) ✅
+//// Time 1-5s: WebSocket FREE to handle pings/data ✅
+//// Time 5s:  Next video attempt
+//// ```
+//// 
+//// WHY THIS MATTERS:
+//// - Old 5s timeout blocked ESP32 WiFi for entire timeout duration
+//// - WebSocket heartbeat expects ping response within 3 seconds
+//// - 5s HTTP block prevented WebSocket from responding → disconnect
+//// - 1s timeout = fail fast, WebSocket stays alive!
+//// 
+//// ============================================================================
+
 //// IMPORTANT NOTES
 //// jwc 25-0803-0700 * This code is for the T-CameraPlus-S3 with 1.3" TFT display
 //// * 240 x 240 pixels

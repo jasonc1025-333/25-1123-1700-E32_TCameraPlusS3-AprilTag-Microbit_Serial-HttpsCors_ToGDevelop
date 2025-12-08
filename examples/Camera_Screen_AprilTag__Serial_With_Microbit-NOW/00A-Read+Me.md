@@ -18,7 +18,7 @@ The script automatically:
 
 1. ✅ **Checks prerequisites** (Python3, gnome-terminal)
 2. ✅ **Sets up virtual environments** (Server + ESP32/PlatformIO)
-3. 🖥️ **Launches Ubuntu WebSocket Server** (port 5000) in separate terminal
+3. ️ **Launches Ubuntu WebSocket Server** (port 5000) in separate terminal
 4. 🎮 **Launches GDevelop Game Server** (port 5100) in separate terminal
 5. 📱 **Uploads ESP32 code** and starts serial monitor in separate terminal
 
