@@ -1,6 +1,46 @@
 # 🚀 Quick Start Guide - ESP32 Smart Camera System
 
-## One-Command Startup
+## ⚠️ CRITICAL: Correct Startup Sequence
+
+**To avoid old ESP32 code interfering with the server, follow this exact order:**
+
+### Step 1: Flash ESP32 First (While Server is OFF)
+```bash
+# 1. Ensure Ubuntu server is NOT running
+#    Check: ps aux | grep python | grep websocket
+#    Stop if running: Ctrl+C or kill <pid>
+
+# 2. Flash new code to ESP32
+#    - Connect via USB
+#    - Upload via PlatformIO/Arduino IDE
+#    - Wait for "Hard resetting via RTS pin..."
+
+# 3. Verify new code running:
+#    - Check Serial Monitor
+#    - Should see "WebSocket Init" message
+#    - ESP32 will wait for server
+```
+
+### Step 2: Start Ubuntu Server (After ESP32 is Ready)
+```bash
+cd examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW/02-Ubuntu-Server_Hub
+python3 02-ubuntu_server_websocket-NOW.py
+
+# Watch for: "🔌 NEW WebSocket CONNECTION"
+```
+
+### Step 3: Verify Connection
+- ESP32 Monitor: `✅ WebSocket CONNECTED`
+- Server Terminal: `📊 Active Connections: 1`
+
+### Why This Order Matters
+1. Old ESP32 code may have different settings
+2. Starting server first = old code sends invalid data
+3. Flashing first = clean state before server starts
+
+---
+
+## One-Command Startup (Automated)
 
 This system includes an automated startup script that launches everything you need with debug terminals.
 
