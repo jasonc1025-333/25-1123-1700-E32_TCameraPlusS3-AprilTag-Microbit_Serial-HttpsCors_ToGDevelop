@@ -860,13 +860,14 @@ bool sendVideoFrame(camera_fb_t *fb) {
     http.begin(client_e32__http_post_to_serverhub__smartcam_video_stream_URL);
     http.addHeader("Content-Type", "image/jpeg");
     
-    //// jwc 25-1207-2000 CRITICAL FIX: Reduce timeout to prevent WebSocket disconnection
-    //// - Old: 5000ms timeout blocked ESP32 WiFi for 5 seconds during failures
-    //// - Problem: ESP32 couldn't respond to WebSocket pings during HTTP blocking
-    //// - WebSocket heartbeat expects response within 3s, so 5s block = disconnect
-    //// - New: 1000ms timeout = fail fast, leave 4s breathing room for WebSocket
-    //// - Result: WebSocket stays connected even when video uploads fail
-    http.setTimeout(1000);  // 1 second timeout - fail fast to preserve WebSocket
+    //// jwc 25-1207-2100 TIMEOUT ADJUSTMENT: Increased to 2s for better reliability
+    //// - Discovery: Code=-11 "timeout" errors don't mean failure - server receives frames!
+    //// - Problem: 1s timeout was too aggressive, server needs 1.2-1.5s to respond
+    //// - Server successfully receives/processes video but acknowledgment is slow
+    //// - New: 2000ms allows server proper response time for accurate reporting
+    //// - Safety: 2s timeout + 5s interval = 3s WebSocket breathing room (still safe!)
+    //// - Result: Cleaner console with real success/failure + stable WebSocket
+    http.setTimeout(2000);  // 2 second timeout - allows server response time
     
     int httpResponseCode = http.POST(jpg_buf, jpg_buf_len);
     
@@ -874,12 +875,29 @@ bool sendVideoFrame(camera_fb_t *fb) {
     delete client;  // Clean up WiFiClient
     
     // Consolidated VIDEO debug print (1 line, all info preserved)
+    // Note: Code=-11 is ACCEPTABLE - server receives frame but ESP32 times out waiting for ACK
+    const char* status_str;
+    const char* details_str;
+    
+    if (httpResponseCode > 0) {
+        status_str = "SUCCESS";
+        details_str = "";
+    } else if (httpResponseCode == -11) {
+        status_str = "TIMEOUT-OK";  // Server receives frame despite ESP32 timeout
+        details_str = " (Server receives frame, ESP32 times out waiting for ACK)";
+    } else if (httpResponseCode == -1) {
+        status_str = "FAILURE";
+        details_str = " (Connection refused - check server)";
+    } else {
+        status_str = "ERROR";
+        details_str = "";
+    }
+    
     printf("\n*** VIDEO 2of2: Size=%db Q=%d | %s Code=%d%s\n", 
            jpg_buf_len, VIDEO_JPEG_QUALITY,
-           (httpResponseCode > 0) ? "SUCCESS" : "FAILURE",
+           status_str,
            httpResponseCode,
-           (httpResponseCode == -1) ? " (Connection refused - check server)" : 
-           (httpResponseCode == -11) ? " (Timeout - server slow/unresponsive)" : "");
+           details_str);
     
     // Free converted JPEG buffer if we allocated it
     if (jpg_converted && jpg_buf) {

@@ -131,6 +131,82 @@ stats = {
 }
 
 # ============================================================================
+# NETWORK LAG MONITORING (jwc 25-1207-2110)
+# ============================================================================
+# Tracks timing between AprilTag (WebSocket) and Video (HTTP) to ensure
+# no interference/conflict. WebSocket needs 3s breathing room for stability.
+
+class NetworkTimingMonitor:
+    """Monitor timing between AprilTag WebSocket and Video HTTP uploads"""
+    def __init__(self):
+        self.last_apriltag_time = 0.0
+        self.last_video_time = 0.0
+        self.gaps = []  # Store recent gaps between video and apriltag
+        self.MAX_GAPS = 20  # Keep last 20 measurements
+        self.SAFETY_THRESHOLD_SEC = 3.0  # WebSocket needs 3s breathing room
+        self.lock = threading.Lock()
+    
+    def record_apriltag(self):
+        """Record AprilTag WebSocket message timestamp"""
+        current_time = time.time()
+        with self.lock:
+            self.last_apriltag_time = current_time
+    
+    def record_video(self):
+        """Record Video HTTP upload timestamp and calculate gap"""
+        current_time = time.time()
+        with self.lock:
+            self.last_video_time = current_time
+            
+            # Calculate gap from last AprilTag message (if any)
+            if self.last_apriltag_time > 0:
+                gap = abs(current_time - self.last_apriltag_time)
+                self.gaps.append(gap)
+                if len(self.gaps) > self.MAX_GAPS:
+                    self.gaps.pop(0)
+                
+                # Check if gap is below safety threshold
+                if gap >= self.SAFETY_THRESHOLD_SEC:
+                    status = "✅ SAFE"
+                    comparison = f"gap >= {self.SAFETY_THRESHOLD_SEC}s"
+                else:
+                    status = "⚠️  TIGHT"
+                    comparison = f"gap < {self.SAFETY_THRESHOLD_SEC}s"
+                
+                # Calculate statistics
+                min_gap = min(self.gaps) if self.gaps else 0
+                max_gap = max(self.gaps) if self.gaps else 0
+                avg_gap = sum(self.gaps) / len(self.gaps) if self.gaps else 0
+                
+                print(f"⏱️  TIMING: Video<<--AprilTag gap={gap:.2f}s | {status} ({comparison}) | Stats: min={min_gap:.2f}s avg={avg_gap:.2f}s max={max_gap:.2f}s")
+    
+    def get_stats(self):
+        """Get timing statistics"""
+        with self.lock:
+            if not self.gaps:
+                return {
+                    'current_gap': 0.0,
+                    'min_gap': 0.0,
+                    'avg_gap': 0.0,
+                    'max_gap': 0.0,
+                    'safety_threshold': self.SAFETY_THRESHOLD_SEC,
+                    'status': 'NO_DATA'
+                }
+            
+            current_gap = self.gaps[-1] if self.gaps else 0
+            return {
+                'current_gap': round(current_gap, 2),
+                'min_gap': round(min(self.gaps), 2),
+                'avg_gap': round(sum(self.gaps) / len(self.gaps), 2),
+                'max_gap': round(max(self.gaps), 2),
+                'safety_threshold': self.SAFETY_THRESHOLD_SEC,
+                'status': 'SAFE' if current_gap >= self.SAFETY_THRESHOLD_SEC else 'TIGHT'
+            }
+
+# Global timing monitor instance
+timing_monitor = NetworkTimingMonitor()
+
+# ============================================================================
 # FLASK APP SETUP
 # ============================================================================
 
@@ -280,6 +356,9 @@ def handle_esp32_message(ws, message):
             broadcast_to_gdevelop(broadcast_message)
             
             stats['apriltag_events'] += 1
+            
+            # Record AprilTag timing (jwc 25-1207-2110)
+            timing_monitor.record_apriltag()
             
             print(f"🟢-->> RECV ESP32: apriltag_data | 📡 ID={payload.get('tag_id')}, Pos=({payload.get('x_cm', 0):.1f},{payload.get('y_cm', 0):.1f},{payload.get('z_cm', 0):.1f})cm <<-- GDevelop({stats['gdevelop_clients']}) | JSON={json.dumps(broadcast_message)[:150]}...")
             
@@ -534,6 +613,9 @@ def receive_video_frame():
                         calculated_fps = (len(video_frame_timestamps) - 1) / time_span
             
             stats['video_frames'] += 1
+            
+            # Record video timing and check gap (jwc 25-1207-2110)
+            timing_monitor.record_video()
             
             # Get current dimensions for logging
             with frame_dimensions_lock:
