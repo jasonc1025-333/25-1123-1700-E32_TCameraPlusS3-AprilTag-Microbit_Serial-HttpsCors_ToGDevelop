@@ -175,55 +175,135 @@
 //// jwc 25-1126-2200 #include <ESPAsyncWebServer.h>
 
 // ============================================================================
-// ⚙️  CRITICAL TIMING CONFIGURATION - ADJUST THESE TO CONTROL FPS/PERFORMANCE
+// ⚙️  FEATURE ENABLE/DISABLE FLAGS
+// ============================================================================
+
+// 📹 VIDEO STREAMING CONTROL (jwc 25-1207-1710)
+// 
+// Set to 'true' to enable HTTP video frame uploads (for human viewing via browser)
+// Set to 'false' to disable video streaming (AprilTag data only via WebSocket)
+//
+// ⚠️  KNOWN ISSUE WITH VIDEO STREAMING:
+//    - HTTP video uploads cause persistent timeout errors (Code=-11)
+//    - Even at conservative 0.5 FPS (2000ms interval) rate
+//    - Timeouts don't affect WebSocket AprilTag data transmission
+//    - But fill console with error messages
+//
+// RECOMMENDATION: Keep DISABLED until HTTP performance is improved
+//    - Focuses system resources on stable WebSocket AprilTag data
+//    - Eliminates HTTP timeout error messages from console
+//    - Can be re-enabled by changing 'false' to 'true' below
+//
+//// jwc 25-1207-1830 const bool Video_Frames_SENDING_BOOL = false;  // ❌ DISABLED (default) - HTTP timeouts persist
+const bool Video_Frames_SENDING_BOOL = true;  // ❌ DISABLED (default) - HTTP timeouts persist
+
+// ============================================================================
+// ⚙️  CRITICAL TIMING CONFIGURATION - ADJUST THESE 3 CONSTANTS TO CONTROL FPS
 // ============================================================================
 // 
-// These parameters control how often data is transmitted over the network.
-// Adjusting these values affects system responsiveness and network load.
+// 📍 QUICK REFERENCE - Three Key Constants To Adjust:
+//    1. AprilTag_Capture_INTERVAL_MS - AprilTag CAPTURE rate (how often to queue)
+//    2. AprilTag_Send_INTERVAL_MS    - AprilTag SEND rate (how often to transmit)
+//    3. VideoFrame_Send_INTERVAL_MS  - Video SEND rate (for browser viewing)
 //
-// 🎯 AprilTag Data Send Rate (WebSocket)
-//    Controls how often AprilTag position/orientation data is sent to server
-//    - Lower value = more responsive but higher network load
-//    - Higher value = less responsive but more stable
+// ⚙️  TUNING GUIDE:
+//    - Want faster AprilTag updates?  → Decrease #1 and #2 (e.g., 500ms = 2 FPS)
+//    - Getting WebSocket disconnects? → Increase #3 (video interferes with WS)
+//    - System lagging in GDevelop?    → Increase #2 (give client time to process)
+//    - Queue overflowing?             → Increase #1 (slower capture rate)
 //
-//    PROGRESSIVE TESTING PATH:
-//    Current:  3000ms (0.33/sec) - TOO SLOW ❌
-//    Step 1:   1000ms (1.0/sec)  - BALANCED ✅ START HERE
-//    Step 2:   750ms  (1.33/sec) - RESPONSIVE (if 1000ms works well)
-//    Step 3:   500ms  (2.0/sec)  - FAST (only if no lag at 750ms)
-//
-//// jwc 25-1204-1100 still seems 10-20% laggy const unsigned long AprilTag_Send_INTERVAL_MS = 1500;  // 1.5s (0.67 msg/sec)
-//// jwc 25-1204-1230 seems a little too slow: const unsigned long AprilTag_Send_INTERVAL_MS = 3000;  // 3.0s (0.33 msg/sec)
-//// jwc 25-1204-1300 seems better, so let's try faster: const unsigned long AprilTag_Send_INTERVAL_MS = 1000;  // 1.0s (1.0 msg/sec)
-//// jwc 25-1204-1300 still holding, try faster: const unsigned long AprilTag_Send_INTERVAL_MS = 750;  // 0.75s (1.33 msg/sec)
-const unsigned long AprilTag_Send_INTERVAL_MS = 500;  // 0.5s (2.0 msg/sec)
+// ============================================================================
 
-//    RECOMMENDED VALUES:
-//      500ms  = 2.0 msg/sec (FAST - for gaming/real-time control)
-//      1000ms = 1.0 msg/sec (BALANCED - good responsiveness)
-//      1500ms = 0.67 msg/sec (STABLE - current setting, prevents GDevelop lag)
-//      2000ms = 0.5 msg/sec (CONSERVATIVE - maximum stability)
+// ============================================================================
+// 1️⃣  APRILTAG CAPTURE RATE - How often to add detected tags to queue
+// ============================================================================
+// Controls: Maximum rate for adding AprilTag detections to transmission queue
+// Impact:   Prevents queue overflow by rate-limiting detections
+// 
+// CONFIGURATION:
+//// jwc 25-1207-1900 User requested: 1.0 FPS for AprilTag capture rate
+const unsigned long AprilTag_Capture_INTERVAL_MS = 1000;  // 1.0s = 1.0 FPS ✅ CONFIGURED
 //
-// 📹 Video Frame Send Rate (HTTP)
-//    Controls how often camera frames are uploaded for human viewing
-//    - This is separate from AprilTag detection which runs continuously
-//    - Video upload is slow, so keep this interval high to avoid blocking
+// RECOMMENDED VALUES:
+//   500ms  = 2.0 FPS (FAST - real-time gaming, may overflow queue if send is slower)
+//   1000ms = 1.0 FPS (BALANCED - good for most applications) ✅ CURRENT
+//   2000ms = 0.5 FPS (CONSERVATIVE - very stable, slower response)
 //
-//// jwc 25-1206-1400 try decrease frame by 50% and have 1fps: const unsigned long VideoFrame_Send_INTERVAL_MS = 3000;  // 3s (0.33 FPS)
-//// jwc 25-1207-0020 Increase video rate: const unsigned long VideoFrame_Send_INTERVAL_MS = 1000;  // 1s (1.0 FPS)
-const unsigned long VideoFrame_Send_INTERVAL_MS = 500;  // 0.5s (2.0 FPS)
-//    RECOMMENDED VALUES:
-//      3000ms = 0.33 FPS (CURRENT - prevents lag, good for monitoring)
-//      5000ms = 0.20 FPS (VERY SLOW - minimal network impact)
-//      1000ms = 1.0 FPS (FASTER - may cause system lag)
+// NOTE: This should be ≤ AprilTag_Send_INTERVAL_MS to prevent queue buildup
+//       If capture is faster than send, queue will grow and cause lag
 //
-// 📸 Camera Hardware Rate (informational - set elsewhere in code)
-//    - Camera captures frames continuously (as fast as possible)
+// USAGE IN CODE:
+//    if (current_time - list_add_time_last >= AprilTag_Capture_INTERVAL_MS)
+// ============================================================================
+
+// ============================================================================
+// 2️⃣  APRILTAG SEND RATE - How often to transmit queued AprilTag data
+// ============================================================================
+// Controls: Rate of WebSocket transmissions of AprilTag position/orientation
+// Impact:   System responsiveness vs network load vs GDevelop processing time
+//
+// CONFIGURATION:
+//// jwc 25-1207-1900 User requested: 1.0 FPS for AprilTag send
+const unsigned long AprilTag_Send_INTERVAL_MS = 1000;  // 1.0s = 1.0 FPS ✅ CONFIGURED
+//
+// RECOMMENDED VALUES:
+//   500ms  = 2.0 FPS (FAST - for gaming/real-time control)
+//   1000ms = 1.0 FPS (BALANCED - good responsiveness) ✅ CURRENT
+//   1500ms = 0.67 FPS (STABLE - prevents GDevelop lag)
+//   2000ms = 0.5 FPS (CONSERVATIVE - maximum stability)
+//
+// TESTING PROGRESSION (if changing):
+//   Start:  1000ms (1.0 FPS) - Balanced
+//   Step 1: 750ms (1.33 FPS) - More responsive (if no lag)
+//   Step 2: 500ms (2.0 FPS)  - Fast (only if system handles it well)
+// ============================================================================
+
+// ============================================================================
+// 3️⃣  VIDEO FRAME SEND RATE - How often to upload camera frames (HTTP)
+// ============================================================================
+// Controls: Rate of HTTP POST video frame uploads for browser viewing
+// Impact:   Video is SEPARATE from AprilTag data (which uses WebSocket)
+//
+// ⚠️  CRITICAL: Video uploads can interfere with WebSocket if too fast!
+//
+// CONFIGURATION:
+//// jwc 25-1207-1900 User requested: 0.2 FPS for video streaming (more conservative due to timeout issues)
+const unsigned long VideoFrame_Send_INTERVAL_MS = 5000;  // 5.0s = 0.2 FPS ✅ CONFIGURED
+//
+// RECOMMENDED VALUES:
+//   1000ms = 1.0 FPS (PROVEN STABLE - if network is good)
+//   1500ms = 0.67 FPS (MORE CONSERVATIVE)
+//   2000ms = 0.5 FPS (VERY CONSERVATIVE)
+//   3000ms = 0.33 FPS (ULTRA CONSERVATIVE)
+//   5000ms = 0.2 FPS (MAXIMUM CONSERVATIVE - current) ✅ CURRENT
+//
+// ⚠️  DO NOT USE:
+//   500ms = 2.0 FPS ❌ Causes WebSocket disconnections & timeout errors
+//
+// KNOWN ISSUES (jwc 25-1207-1615):
+//   - Fast video uploads cause HTTP timeout errors (Code=-11)
+//   - HTTP uploads can block WebSocket handshake
+//   - Results in "Connection closed: 1005" errors
+//   - Keep this value HIGH (≥2000ms) for stability
+//
+// IF YOU NEED FASTER VIDEO:
+//   1. Upgrade network infrastructure (faster WiFi/router)
+//   2. Use dedicated video streaming protocol (not HTTP POST)
+//   3. Reduce JPEG quality further (currently Q=10)
+// ============================================================================
+
+// ============================================================================
+// 📊 SUMMARY - Current Configuration:
+//    - AprilTag Capture:  1.0 FPS (every 1000ms via AprilTag_Capture_INTERVAL_MS)
+//    - AprilTag Send:     1.0 FPS (every 1000ms via AprilTag_Send_INTERVAL_MS)
+//    - Video Frame Send:  0.2 FPS (every 5000ms via VideoFrame_Send_INTERVAL_MS)
+//
+// 📸 Camera Hardware (informational - configured elsewhere):
+//    - Camera captures frames continuously (as fast as hardware allows)
 //    - Camera clock: 15 MHz (config.xclk_freq_hz in OV2640_Initialization)
 //    - Frame resolution: 240x240 pixels (FRAMESIZE_240X240)
-//    - AprilTag detection: Processes every frame in real-time
-//    - Only TRANSMISSION is rate-limited by the intervals above
-//
+//    - AprilTag detection: Processes EVERY frame in real-time
+//    - Only TRANSMISSION is rate-limited by the 3 constants above
 // ============================================================================
 
 // WiFi credentials
@@ -555,7 +635,6 @@ const unsigned long HTTP_SEND_INTERVAL_MS = 2000;  // 2.0s (0.50 msg/sec) - Give
 
 // Rate limiting for list additions - prevent list overflow
 unsigned long list_add_time_last = 0;
-const unsigned long LIST_ADD_INTERVAL_MS = 500;  // Only add to list every 500ms (2 per second max)
 
 // Tag data buffer - stores latest detected tag
 struct LatestTagData {
@@ -573,12 +652,14 @@ struct LatestTagData {
 void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
     switch(type) {
         case WStype_DISCONNECTED:
-            printf("❌ WebSocket DISCONNECTED | TotalMsg=%lu, Reconnects=%lu\n", totalMessagesSent, totalReconnects);
+            //// jwc 25-1207-1820 Need '\n'to break from serial-communications w/ MicroBit
+            printf("\n❌ WebSocket DISCONNECTED | TotalMsg=%lu, Reconnects=%lu\n", totalMessagesSent, totalReconnects);
             webSocketConnected = false;
             break;
             
         case WStype_CONNECTED: {
-            printf("✅ WebSocket CONNECTED | URL=ws://%s:%d%s\n", WS_HOST, WS_PORT, WS_PATH);
+            //// jwc 25-1207-1820 Need '\n'to break from serial-communications w/ MicroBit
+            printf("\n✅ WebSocket CONNECTED | URL=ws://%s:%d%s\n", WS_HOST, WS_PORT, WS_PATH);
             webSocketConnected = true;
             
             // Send identify message with auth token
@@ -750,7 +831,14 @@ bool sendVideoFrame(camera_fb_t *fb) {
     //// This fixes connection refused errors with local HTTP servers
     http.begin(client_e32__http_post_to_serverhub__smartcam_video_stream_URL);
     http.addHeader("Content-Type", "image/jpeg");
-    http.setTimeout(5000);  // 5 second timeout - longer for video uploads
+    
+    //// jwc 25-1207-2000 CRITICAL FIX: Reduce timeout to prevent WebSocket disconnection
+    //// - Old: 5000ms timeout blocked ESP32 WiFi for 5 seconds during failures
+    //// - Problem: ESP32 couldn't respond to WebSocket pings during HTTP blocking
+    //// - WebSocket heartbeat expects response within 3s, so 5s block = disconnect
+    //// - New: 1000ms timeout = fail fast, leave 4s breathing room for WebSocket
+    //// - Result: WebSocket stays connected even when video uploads fail
+    http.setTimeout(1000);  // 1 second timeout - fail fast to preserve WebSocket
     
     int httpResponseCode = http.POST(jpg_buf, jpg_buf_len);
     
@@ -1331,8 +1419,8 @@ void loop()
             gfx->setCursor(120, 1);
             gfx->printf("%lu/%lu", totalMessagesCaptured, totalMessagesSent);
             
-            // Bottom-left: Max capture rate (based on LIST_ADD_INTERVAL_MS)
-            float max_capture_rate = 1000.0 / LIST_ADD_INTERVAL_MS;  // Converts ms to Hz
+            // Bottom-left: Max capture rate (based on AprilTag_Capture_INTERVAL_MS)
+            float max_capture_rate = 1000.0 / AprilTag_Capture_INTERVAL_MS;  // Converts ms to Hz
             gfx->setTextSize(2);
             gfx->setTextColor(YELLOW);
             gfx->setCursor(1, 220);
@@ -1557,7 +1645,7 @@ void loop()
                     unsigned long current_time_for_list = millis();
                     
                     // Only add to list if enough time has passed since last addition
-                    if (current_time_for_list - list_add_time_last >= LIST_ADD_INTERVAL_MS) {
+                    if (current_time_for_list - list_add_time_last >= AprilTag_Capture_INTERVAL_MS) {
                         sensor_t *s = esp_camera_sensor_get();
                         if (s) {
                             camera_sensor_info_t *sinfo = esp_camera_sensor_get_info(&(s->id));
@@ -1567,7 +1655,7 @@ void loop()
                                 list_add_time_last = current_time_for_list;
                                 
                                 #if DEBUG >= 1
-                                printf("*** LIST: Added tag (rate-limited to every %lums)\n", LIST_ADD_INTERVAL_MS);
+                                printf("*** LIST: Added tag (rate-limited to every %lums)\n", AprilTag_Capture_INTERVAL_MS);
                                 #endif
                             }
                         }
@@ -1575,7 +1663,7 @@ void loop()
                     #if DEBUG >= 2
                     else {
                         printf("*** LIST: Skipped addition (rate limit: %lums remaining)\n", 
-                               LIST_ADD_INTERVAL_MS - (current_time_for_list - list_add_time_last));
+                               AprilTag_Capture_INTERVAL_MS - (current_time_for_list - list_add_time_last));
                     }
                     #endif
 
@@ -1833,10 +1921,14 @@ void loop()
         lag_ms = current_time - tagData_Queue[oldest_pos].timestamp;
     }
     
-    // Decide whether to send video based on lag
+    // Decide whether to send video based on lag and flag
     bool should_send_video = false;
     
-    if (OV2640_Initialization_Flag && wifi_connected && 
+    // ⚠️ CHECK VIDEO STREAMING FLAG (jwc 25-1207-1710)
+    // Only attempt video streaming if enabled via Video_Frames_SENDING_BOOL flag
+    // Video starts as soon as WebSocket connection is established (no AprilTag requirement)
+    if (Video_Frames_SENDING_BOOL && 
+        OV2640_Initialization_Flag && wifi_connected && webSocketConnected && 
         (current_time - video_send_time_last >= VideoFrame_Send_INTERVAL_MS)) {
         
         if (lag_ms < 3000) {

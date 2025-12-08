@@ -7,6 +7,30 @@
 # REVISION HISTORY:
 # ============================================================================
 # 
+# jwc 25-1207-1800 - Startup Order Fix
+# ------------------------------------------------------
+# 
+# Primary Issue: ESP32 must be flashed BEFORE server starts
+# 
+# Script Sequence Now:
+# 
+# Step 1: Check Prerequisites
+# Step 2: Check Ports
+# Step 3: Setup Virtual Environments
+# Step 4: Flash ESP32 FIRST ⬅️ MOVED UP
+#         └─ Wait 10 seconds for stabilization
+# Step 5: Start Ubuntu Server ⬅️ MOVED DOWN (after ESP32)
+# Step 6: Start GDevelop Server
+# Step 7: Display Summary
+# 
+# Why This Matters:
+#   - Prevents old ESP32 code from connecting to new server
+#   - Eliminates "Connection closed: 1005" WebSocket errors
+#   - Ensures server sees only NEW ESP32 code on first connection
+#   - Maximum stability with proper initialization sequence
+# 
+# ============================================================================
+# 
 # jwc 25-1205-0200 - Major Script Fixes & Enhancements
 # ------------------------------------------------------
 # 
@@ -306,9 +330,97 @@ fi
 echo ""
 
 # ============================================================================
-# Step 4: Start Ubuntu Server in New Terminal
+# Step 4: Upload ESP32 Code FIRST (Before Server Starts)
 # ============================================================================
-echo -e "${YELLOW}[4/7] Starting Ubuntu Server...${NC}"
+echo -e "${YELLOW}[4/7] Flashing ESP32 Client FIRST...${NC}"
+echo -e "${YELLOW}⚠️  IMPORTANT: ESP32 must be flashed with new code BEFORE server starts${NC}"
+echo -e "${YELLOW}   This prevents old ESP32 code from connecting with invalid data${NC}"
+echo ""
+
+ESP32_ENV="Camera_Screen_AprilTag__Serial_With_Microbit-NOW__Esp32_Client_Websocket"
+
+# Create a launcher script for ESP32 (uses venv PlatformIO)
+ESP32_LAUNCHER="$SCRIPT_DIR/01-Esp32-Client/.launch_esp32.sh"
+cat > "$ESP32_LAUNCHER" << EOF
+#!/bin/bash
+PROJECT_ROOT="$PROJECT_ROOT"
+ESP32_ENV="$ESP32_ENV"
+SCRIPT_DIR="$SCRIPT_DIR"
+
+# Activate PlatformIO virtual environment
+source "\$SCRIPT_DIR/01-Esp32-Client/venv/bin/activate"
+
+cd "\$PROJECT_ROOT"
+
+echo "=========================================="
+echo "   ESP32 Client - Upload & Monitor"
+echo "=========================================="
+echo ""
+echo "Environment: \$ESP32_ENV"
+echo "Project Root: \$PROJECT_ROOT"
+echo "Using: venv PlatformIO"
+echo ""
+
+# Upload code
+echo ">>> Uploading code to ESP32..."
+pio run -e "\$ESP32_ENV" --target upload
+
+if [ \$? -eq 0 ]; then
+    echo ""
+    echo ">>> Upload successful! Starting serial monitor..."
+    echo ">>> ESP32 will wait for server to start..."
+    echo ">>> Press Ctrl+C to stop monitoring"
+    echo ""
+    sleep 2
+    
+    # Start serial monitor
+    pio device monitor -e "\$ESP32_ENV"
+else
+    echo ""
+    echo ">>> Upload failed!"
+    echo ">>> Make sure ESP32 is connected via USB"
+fi
+
+echo ""
+echo "Monitoring stopped. Press Enter to close..."
+read
+EOF
+
+chmod +x "$ESP32_LAUNCHER"
+
+# Launch ESP32 in new terminal (with clean environment to avoid snap library conflicts)
+env -i HOME="$HOME" USER="$USER" PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
+    DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" \
+    XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
+    DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" \
+    gnome-terminal --title="ESP32 Client - Serial Monitor" \
+                   --geometry=120x40+600+0 \
+                   -- bash -c "$ESP32_LAUNCHER" &
+
+echo -e "${GREEN}✓ ESP32 flash started in separate terminal${NC}"
+echo ""
+echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${YELLOW}⚠️  IMPORTANT: DO NOT START SERVER YET!${NC}"
+echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+echo ""
+echo -e "${YELLOW}Please check the ESP32 serial monitor terminal and verify:${NC}"
+echo ""
+echo "  1. ✅ ESP32 upload completed successfully"
+echo "  2. ✅ ESP32 connected to WiFi"
+echo "  3. ✅ Serial monitor shows: 'Waiting for server...' or similar message"
+echo ""
+echo -e "${YELLOW}Only when you see the ESP32 is ready and waiting, press Enter to start the server.${NC}"
+echo ""
+read -p "Press Enter when ESP32 serial monitor confirms it's waiting for server... "
+
+echo ""
+echo -e "${GREEN}✓ User confirmed ESP32 is ready and waiting${NC}"
+echo ""
+
+# ============================================================================
+# Step 5: Start Ubuntu Server AFTER ESP32 is Flashed
+# ============================================================================
+echo -e "${YELLOW}[5/7] Starting Ubuntu Server (AFTER ESP32 flash)...${NC}"
 
 SERVER_SCRIPT="$SCRIPT_DIR/02-Ubuntu-Server_Hub/02-ubuntu_server_websocket-NOW.py"
 
@@ -345,7 +457,7 @@ env -i HOME="$HOME" USER="$USER" PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:
                    --geometry=100x30+0+0 \
                    -- bash -c "$SERVER_LAUNCHER" &
 
-echo -e "${GREEN}✓ Ubuntu Server launched in separate terminal${NC}"
+echo -e "${GREEN}✓ Ubuntu Server launched (AFTER ESP32 flash)${NC}"
 echo ""
 
 # Wait for server to start
@@ -353,9 +465,9 @@ echo "Waiting 3 seconds for server to start..."
 sleep 3
 
 # ============================================================================
-# Step 5: Start GDevelop Game Server in New Terminal
+# Step 6: Start GDevelop Game Server in New Terminal
 # ============================================================================
-echo -e "${YELLOW}[5/7] Starting GDevelop Game Server...${NC}"
+echo -e "${YELLOW}[6/7] Starting GDevelop Game Server...${NC}"
 
 GDEVELOP_DIR="$PROJECT_ROOT/11k-25-1202-1330--25-1127-0950-E32_SmartCam-ToUbuntuServerHub-ToGdevelop-WebSocket-NOW/export-Jwc--Gdevelop_Html_Server-NOW"
 
@@ -406,74 +518,6 @@ EOF
     # Wait a moment for game server to start
     sleep 1
 fi
-
-# ============================================================================
-# Step 6: Upload ESP32 Code & Start Serial Monitor
-# ============================================================================
-echo -e "${YELLOW}[6/7] Starting ESP32 Client...${NC}"
-
-ESP32_ENV="Camera_Screen_AprilTag__Serial_With_Microbit-NOW__Esp32_Client_Websocket"
-
-# Create a launcher script for ESP32 (uses venv PlatformIO)
-ESP32_LAUNCHER="$SCRIPT_DIR/01-Esp32-Client/.launch_esp32.sh"
-cat > "$ESP32_LAUNCHER" << EOF
-#!/bin/bash
-PROJECT_ROOT="$PROJECT_ROOT"
-ESP32_ENV="$ESP32_ENV"
-SCRIPT_DIR="$SCRIPT_DIR"
-
-# Activate PlatformIO virtual environment
-source "\$SCRIPT_DIR/01-Esp32-Client/venv/bin/activate"
-
-cd "\$PROJECT_ROOT"
-
-echo "=========================================="
-echo "   ESP32 Client - Upload & Monitor"
-echo "=========================================="
-echo ""
-echo "Environment: \$ESP32_ENV"
-echo "Project Root: \$PROJECT_ROOT"
-echo "Using: venv PlatformIO"
-echo ""
-
-# Upload code
-echo ">>> Uploading code to ESP32..."
-pio run -e "\$ESP32_ENV" --target upload
-
-if [ \$? -eq 0 ]; then
-    echo ""
-    echo ">>> Upload successful! Starting serial monitor..."
-    echo ">>> Press Ctrl+C to stop monitoring"
-    echo ""
-    sleep 2
-    
-    # Start serial monitor
-    pio device monitor -e "\$ESP32_ENV"
-else
-    echo ""
-    echo ">>> Upload failed!"
-    echo ">>> Make sure ESP32 is connected via USB"
-fi
-
-echo ""
-echo "Monitoring stopped. Press Enter to close..."
-read
-EOF
-
-chmod +x "$ESP32_LAUNCHER"
-
-# Launch ESP32 in new terminal (with clean environment to avoid snap library conflicts)
-# Fix for: "symbol lookup error: /snap/core20/current/lib/x86_64-linux-gnu/libpthread.so.0: undefined symbol: __libc_pthread_init"
-env -i HOME="$HOME" USER="$USER" PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
-    DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" \
-    XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
-    DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" \
-    gnome-terminal --title="ESP32 Client - Serial Monitor" \
-                   --geometry=120x40+600+0 \
-                   -- bash -c "$ESP32_LAUNCHER" &
-
-echo -e "${GREEN}✓ ESP32 Client launcher started in separate terminal${NC}"
-echo ""
 
 # ============================================================================
 # Step 7: Summary

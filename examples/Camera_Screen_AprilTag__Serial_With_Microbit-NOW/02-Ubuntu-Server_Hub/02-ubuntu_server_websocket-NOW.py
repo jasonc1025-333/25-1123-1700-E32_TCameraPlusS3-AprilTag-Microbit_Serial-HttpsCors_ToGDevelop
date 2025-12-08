@@ -875,10 +875,13 @@ def video_fps():
         width = actual_frame_width
         height = actual_frame_height
     
-    # CONFIGURED target values from ESP32 code (VideoFrame_Send_INTERVAL_MS = 500ms)
+    # CONFIGURED target values from ESP32 code (VideoFrame_Send_INTERVAL_MS = 5000ms)
     # These are the CONSTANT settings, not measured values
-    TARGET_INTERVAL_MS = 500  # From ESP32: const unsigned long VideoFrame_Send_INTERVAL_MS = 500
-    TARGET_FPS = 1000.0 / TARGET_INTERVAL_MS  # 1000ms / 500ms = 2.0 FPS
+    # ⚠️ IMPORTANT: Keep this in sync with ESP32 code constant!
+    #    ESP32 File: 01B-Camera_Screen_AprilTag__Serial_With_Microbit-HttpToWebsocket-NOW.ino.cpp
+    #    ESP32 Line: ~230: const unsigned long VideoFrame_Send_INTERVAL_MS = 5000;
+    TARGET_INTERVAL_MS = 5000  # From ESP32: const unsigned long VideoFrame_Send_INTERVAL_MS = 5000
+    TARGET_FPS = 1000.0 / TARGET_INTERVAL_MS  # 1000ms / 5000ms = 0.2 FPS
     
     return jsonify({
         'fps': round(current_fps, 2),
