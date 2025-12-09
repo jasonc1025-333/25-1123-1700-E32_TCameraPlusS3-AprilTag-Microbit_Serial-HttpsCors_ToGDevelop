@@ -178,7 +178,10 @@ class NetworkTimingMonitor:
                 max_gap = max(self.gaps) if self.gaps else 0
                 avg_gap = sum(self.gaps) / len(self.gaps) if self.gaps else 0
                 
-                print(f"⏱️  TIMING: Video<<--AprilTag gap={gap:.2f}s | {status} ({comparison}) | Stats: min={min_gap:.2f}s avg={avg_gap:.2f}s max={max_gap:.2f}s")
+                # jwc 25-1209-1230 DISABLED: Timing monitor obsolete for WebSocket-only video
+                # This was needed when HTTP video interfered with WebSocket AprilTag
+                # Now both use WebSocket - no interference possible!
+                # print(f"⏱️  TIMING: Video<<--AprilTag gap={gap:.2f}s | {status} ({comparison}) | Stats: min={min_gap:.2f}s avg={avg_gap:.2f}s max={max_gap:.2f}s")
     
     def get_stats(self):
         """Get timing statistics"""
@@ -684,8 +687,8 @@ def receive_video_frame():
             
             stats['video_frames'] += 1
             
-            # Record video timing and check gap (jwc 25-1207-2110)
-            timing_monitor.record_video()
+            # jwc 25-1209-1230 DISABLED: Timing monitor obsolete for WebSocket-only video
+            # timing_monitor.record_video()
             
             # Get current dimensions for logging
             with frame_dimensions_lock:

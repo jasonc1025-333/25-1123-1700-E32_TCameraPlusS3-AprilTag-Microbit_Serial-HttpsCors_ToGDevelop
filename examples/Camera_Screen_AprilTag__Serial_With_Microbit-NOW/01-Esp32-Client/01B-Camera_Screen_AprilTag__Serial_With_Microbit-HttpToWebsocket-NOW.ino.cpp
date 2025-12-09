@@ -1999,8 +1999,8 @@ void loop()
 
     }
     
-    //// jwc 25-1127-1130 PERIODIC HTTP SENDER - Processes list one tag at a time
-    // Check if it's time to send tag data from list via HTTP
+    //// jwc 25-1127-1130 PERIODIC WEBSOCKET SENDER - Processes list one tag at a time
+    // Check if it's time to send tag data from list via WebSocket
     unsigned long current_time = millis();
     if (list_count > 0 && 
         (current_time - http_send_time_last >= AprilTag_Send_INTERVAL_MS)) {
@@ -2009,7 +2009,7 @@ void loop()
         tagData_Struct tag_to_send;
         if (listTagEvent_Remove(&tag_to_send)) {
             #if DEBUG >= 1
-            printf("\n*** HTTP: Sending tag from list (List: %d remaining)...\n", list_count);
+            printf("\n*** WebSocket: Sending tag from list (List: %d remaining)...\n", list_count);
             #endif
             
             // Send via HTTP POST
