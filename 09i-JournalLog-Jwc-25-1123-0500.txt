@@ -206,3 +206,61 @@ You can now see exactly when and how CORS headers are applied to both the prefli
 
 
 
+25-1208-2200
+   __HTTP (Current):__
+
+   - Latency: 1200-1500ms (timeout issues)
+   - Success Rate: ~50% (Code=-11 errors)
+   - ESP32 blocking: 1-2 seconds per attempt
+   - Server load: High (new HTTP connection each frame)
+
+   __WebSocket (Expected):__
+
+   - Latency: 10-30ms (persistent connection)
+   - Success Rate: 99%+ (no timeout issues)
+   - ESP32 blocking: <10ms (already connected)
+   - Server load: Low (reuse connection)
+
+
+   ## 💡 MIGRATION STRATEGY
+
+   ### Option A: Clean Cut (Recommended)
+
+   Replace HTTP video completely with WebSocket:
+
+   - Remove `sendVideoFrame()` HTTP function
+   - Add `sendVideoFrameWebSocket()` WebSocket function
+   - Update loop to use WebSocket
+   - Keep `/photo` endpoint for debugging
+
+   ### Option B: Hybrid (Safer)
+
+   Keep both HTTP and WebSocket, controlled by flag:
+
+   ```cpp
+   if (USE_WEBSOCKET_VIDEO) {
+      sendVideoFrameWebSocket(video_frame);
+   } else {
+      sendVideoFrame(video_frame);  // Fallback to HTTP
+   }
+```
+
+   ## 📊 BRANCH NAMING CONVENTIONS
+
+   Good options for your use case:
+
+   ```bash
+   # Feature branch (recommended)
+   git checkout -b feature/websocket-video-streaming
+
+   # Improvement branch
+   git checkout -b improvement/video-websocket-migration
+
+   # Fix branch (if treating timeouts as bug)
+   git checkout -b fix/video-http-timeout-errors
+
+   # Experiment branch (if just testing)
+   git checkout -b experiment/ws-binary-video
+   ```
+
+
