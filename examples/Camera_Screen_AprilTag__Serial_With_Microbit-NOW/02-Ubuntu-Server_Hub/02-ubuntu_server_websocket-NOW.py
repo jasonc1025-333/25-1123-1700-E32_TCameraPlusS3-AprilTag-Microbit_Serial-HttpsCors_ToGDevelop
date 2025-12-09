@@ -472,6 +472,76 @@ def websocket(ws):
             if message is None:
                 break
             
+            # ============================================================================
+            # BINARY MESSAGE HANDLING (jwc 25-1209-1040)
+            # ============================================================================
+            # Check if message is binary (video frame) vs text (JSON)
+            if isinstance(message, bytes):
+                # Binary message - this is a video frame from ESP32
+                global latest_video_frame, calculated_fps, actual_frame_width, actual_frame_height
+                
+                try:
+                    jpeg_data = message
+                    
+                    if jpeg_data and len(jpeg_data) > 0:
+                        current_time = time.time()
+                        
+                        # Extract frame dimensions from JPEG header
+                        try:
+                            # Find SOF0 marker (0xFFC0)
+                            for i in range(len(jpeg_data) - 10):
+                                if jpeg_data[i] == 0xFF and jpeg_data[i+1] == 0xC0:
+                                    # SOF0 found - extract dimensions (big-endian)
+                                    height = (jpeg_data[i+5] << 8) | jpeg_data[i+6]
+                                    width = (jpeg_data[i+7] << 8) | jpeg_data[i+8]
+                                    
+                                    with frame_dimensions_lock:
+                                        actual_frame_width = width
+                                        actual_frame_height = height
+                                    break
+                        except Exception as e:
+                            print(f"⚠️  Could not extract JPEG dimensions: {e}")
+                        
+                        # Store frame with timestamp (thread-safe)
+                        with latest_video_frame_lock:
+                            latest_video_frame = (jpeg_data, current_time)
+                        
+                        # Calculate FPS from timestamps
+                        with video_fps_lock:
+                            video_frame_timestamps.append(current_time)
+                            if len(video_frame_timestamps) > MAX_FPS_SAMPLES:
+                                video_frame_timestamps.pop(0)
+                            
+                            if len(video_frame_timestamps) >= 2:
+                                time_span = video_frame_timestamps[-1] - video_frame_timestamps[0]
+                                if time_span > 0:
+                                    calculated_fps = (len(video_frame_timestamps) - 1) / time_span
+                        
+                        stats['video_frames'] += 1
+                        
+                        # Record video timing
+                        timing_monitor.record_video()
+                        
+                        # Get current dimensions for logging
+                        with frame_dimensions_lock:
+                            width_log = actual_frame_width
+                            height_log = actual_frame_height
+                        
+                        print(f"🟢-->> RECV ESP32: video_frame (WebSocket Binary) | 📹 {len(jpeg_data)} bytes {width_log}x{height_log} (#{stats['video_frames']}) FPS={calculated_fps:.2f}")
+                        
+                        # Optional: Send acknowledgment to ESP32
+                        # ack_msg = {'event': 'video_ack', 'status': 'received', 'size': len(jpeg_data)}
+                        # ws.send(json.dumps(ack_msg))
+                        
+                except Exception as e:
+                    print(f"❌ Error processing binary video frame: {e}")
+                
+                # Skip text processing for binary messages
+                continue
+            
+            # ============================================================================
+            # TEXT MESSAGE HANDLING (JSON)
+            # ============================================================================
             # Determine client type from first message
             try:
                 # Fix single quotes to double quotes if needed

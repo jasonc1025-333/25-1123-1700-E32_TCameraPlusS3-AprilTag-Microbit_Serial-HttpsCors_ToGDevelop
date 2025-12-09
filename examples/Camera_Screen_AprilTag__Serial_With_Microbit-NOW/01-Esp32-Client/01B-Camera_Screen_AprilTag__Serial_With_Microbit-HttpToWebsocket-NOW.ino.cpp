@@ -235,7 +235,7 @@ const bool Video_Frames_SENDING_BOOL = true;  // ❌ DISABLED (default) - HTTP t
 // Switch instantly by changing this flag and recompiling (30 seconds)
 // Both functions available - easy to compare performance!
 //
-#define USE_WEBSOCKET_VIDEO false  // false=HTTP (current), true=WebSocket (new)
+#define USE_WEBSOCKET_VIDEO true  // false=HTTP (legacy), true=WebSocket (ACTIVE FOR TESTING!)
 
 // ============================================================================
 // ⚙️  CRITICAL TIMING CONFIGURATION - ADJUST THESE 3 CONSTANTS TO CONTROL FPS
