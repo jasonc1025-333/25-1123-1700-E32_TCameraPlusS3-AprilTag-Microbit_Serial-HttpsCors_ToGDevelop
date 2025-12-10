@@ -309,7 +309,8 @@ const unsigned long AprilTag_Send_INTERVAL_MS = 1000;  // 1.0s = 1.0 FPS ✅ CON
 // CONFIGURATION:
 //// jwc 25-1207-1900 User requested: 0.2 FPS for video streaming (more conservative due to timeout issues)
 //// jwc 25-1209-1600 ARCHIVED (too fast, high jitter): const unsigned long VideoFrame_Send_INTERVAL_MS = 500;  // 0.5s = 2.0 FPS
-const unsigned long VideoFrame_Send_INTERVAL_MS = 1000;  // 1.0s = 1.0 FPS ✅ STABILITY OPTIMIZED (jwc 25-1209-2330)
+//// jwc 25-1210-0750 Changed to non-const to allow real-time updates from web interface
+unsigned long VideoFrame_Send_INTERVAL_MS = 1000;  // 1.0s = 1.0 FPS ✅ STABILITY OPTIMIZED (can be changed via WebSocket)
 // jwc 25-1209-2330 Changed from 500ms to 1000ms (2× slower but more stable - reduces jitter from 600ms to <100ms)
 // Testing 2.0 FPS based on FPS analysis showing system can handle higher rates:
 //   - Measured at 1000ms: 0.81 FPS actual (81% of 1.0 FPS target)
@@ -751,6 +752,18 @@ void webSocketEvent(WStype_t type, uint8_t * payload, size_t length) {
                 }
                 else if (strcmp(event, "apriltag_ack") == 0) {
                     printf("      ✅ Server: apriltag_data acknowledged\n");
+                }
+                else if (strcmp(event, "set_video_interval") == 0) {
+                    // Server requesting to change video frame send interval
+                    int new_interval_ms = doc["interval_ms"];
+                    if (new_interval_ms >= 100 && new_interval_ms <= 10000) {
+                        VideoFrame_Send_INTERVAL_MS = new_interval_ms;
+                        float new_fps = 1000.0 / new_interval_ms;
+                        printf("      ✅ Server: video interval updated to %dms (%.2f FPS)\n", new_interval_ms, new_fps);
+                        printf("      📺 TFT Display 'SV:' will update on next frame\n");
+                    } else {
+                        printf("      ❌ Server: invalid interval %dms (must be 100-10000ms)\n", new_interval_ms);
+                    }
                 }
             }
             break;
@@ -1558,12 +1571,19 @@ void loop()
             gfx->setCursor(1, 220);
             gfx->printf("C:%.1f/s", max_capture_rate);
             
-            // Bottom-right: Max send rate (based on AprilTag_Send_INTERVAL_MS)
-            float max_send_rate = 1000.0 / AprilTag_Send_INTERVAL_MS;  // Converts ms to Hz
+            // Bottom-right: AprilTag send rate (based on AprilTag_Send_INTERVAL_MS)
+            float apriltag_send_rate = 1000.0 / AprilTag_Send_INTERVAL_MS;  // Converts ms to Hz
             gfx->setTextSize(2);
             gfx->setTextColor(YELLOW);
+            gfx->setCursor(130, 200);  // Moved up 20 pixels
+            gfx->printf("SD:%.1f/s", apriltag_send_rate);  // "SD" = Send AprilTag Data
+            
+            // Bottom-right (lower): Video send rate (based on VideoFrame_Send_INTERVAL_MS)
+            float video_send_rate = 1000.0 / VideoFrame_Send_INTERVAL_MS;  // Converts ms to Hz
+            gfx->setTextSize(2);
+            gfx->setTextColor(CYAN);  // Different color for video
             gfx->setCursor(130, 220);
-            gfx->printf("S:%.2f/s", max_send_rate);
+            gfx->printf("SV:%.1f/s", video_send_rate);  // "SV" = Send Video
 
             //// \/ jwc 25-0411-1800 convert to April-Tag Detect
 

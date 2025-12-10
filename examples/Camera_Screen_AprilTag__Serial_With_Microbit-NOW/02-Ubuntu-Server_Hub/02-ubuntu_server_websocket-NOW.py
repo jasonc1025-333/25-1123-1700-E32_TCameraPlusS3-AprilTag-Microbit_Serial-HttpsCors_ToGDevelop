@@ -967,6 +967,36 @@ def video_viewer():
                 border-radius: 10px;
                 font-size: 14px;
             }}
+            .help-section {{
+                margin-top: 20px;
+                padding: 15px;
+                background: #2a2a2a;
+                border-radius: 10px;
+                font-size: 13px;
+                line-height: 1.6;
+            }}
+            .help-section h3 {{
+                color: #4CAF50;
+                margin-top: 0;
+                margin-bottom: 10px;
+                font-size: 16px;
+            }}
+            .help-section .metric {{
+                margin-bottom: 12px;
+                padding: 8px;
+                background: #1a1a1a;
+                border-radius: 5px;
+            }}
+            .help-section .metric-name {{
+                color: #4CAF50;
+                font-weight: bold;
+            }}
+            .help-section .metric-values {{
+                margin-top: 5px;
+                padding-left: 15px;
+                color: #999;
+                font-size: 12px;
+            }}
             .stats-row {{
                 display: flex;
                 justify-content: space-between;
@@ -1047,9 +1077,161 @@ def video_viewer():
                     <span id="recommendation" style="font-size: 12px;">Calculating...</span>
                 </div>
             </div>
+            
+            <div class="help-section">
+                <h3>📖 Performance Metrics Explained</h3>
+                
+                <div class="metric">
+                    <span class="metric-name">🎯 Jitter</span> - Timing consistency between frames
+                    <div class="metric-values">
+                        • <strong>Frame Interval:</strong> Time from start of one frame to the start of the next frame<br>
+                        • <strong>What it is:</strong> Standard deviation of frame intervals (how much timing varies)<br>
+                        • <strong>Why it matters:</strong> Low jitter = smooth, predictable stream; High jitter = choppy, unpredictable<br>
+                        • <strong>Good values:</strong><br>
+                        &nbsp;&nbsp;- <span style="color:#3498db">Excellent:</span> &lt;0.1s (100ms) - Very smooth, professional quality<br>
+                        &nbsp;&nbsp;- <span style="color:#27ae60">Good:</span> 0.1-0.3s - Acceptable, minor variations<br>
+                        &nbsp;&nbsp;- <span style="color:#f39c12">OK:</span> 0.3-0.5s - Noticeable but usable<br>
+                        &nbsp;&nbsp;- <span style="color:#e74c3c">High:</span> &gt;0.5s - Choppy, needs optimization<br>
+                        • <strong>How to improve:</strong> Increase ESP32 send interval, reduce resolution, lower JPEG quality
+                    </div>
+                </div>
+                
+                <div class="metric">
+                    <span class="metric-name">📊 Efficiency</span> - How well actual performance matches target
+                    <div class="metric-values">
+                        • <strong>What it is:</strong> Percentage of how close actual FPS is to target FPS<br>
+                        • <strong>Why it matters:</strong> Shows if ESP32 can maintain configured frame rate<br>
+                        • <strong>Calculation:</strong> (Actual FPS / Target FPS) × 100%<br>
+                        • <strong>Good values:</strong><br>
+                        &nbsp;&nbsp;- <span style="color:#3498db">Optimal:</span> &gt;95% - System performing excellently<br>
+                        &nbsp;&nbsp;- <span style="color:#27ae60">Good:</span> 85-95% - Minor tuning could help<br>
+                        &nbsp;&nbsp;- <span style="color:#f39c12">Fair:</span> 70-85% - Consider adjusting send interval<br>
+                        &nbsp;&nbsp;- <span style="color:#e74c3c">Poor:</span> &lt;70% - Network or configuration issues<br>
+                        • <strong>Example:</strong> Target=1.0 FPS, Actual=0.85 FPS → Efficiency=85%<br>
+                        • <strong>How to improve:</strong> Increase send interval for more realistic target
+                    </div>
+                </div>
+                
+                <div class="metric">
+                    <span class="metric-name">⚙️  Processing</span> - Server-side frame processing time
+                    <div class="metric-values">
+                        • <strong>What it is:</strong> Time server takes to receive and store each frame (milliseconds)<br>
+                        • <strong>Why it matters:</strong> Shows if server is a bottleneck (usually it's not!)<br>
+                        • <strong>Good values:</strong><br>
+                        &nbsp;&nbsp;- <span style="color:#3498db">Fast:</span> &lt;1ms - Server has plenty of headroom<br>
+                        &nbsp;&nbsp;- <span style="color:#27ae60">Good:</span> 1-10ms - Normal, no issues<br>
+                        &nbsp;&nbsp;- <span style="color:#f39c12">OK:</span> 10-50ms - Acceptable but watch it<br>
+                        &nbsp;&nbsp;- <span style="color:#e74c3c">Slow:</strong> &gt;50ms - Server bottleneck, optimize code<br>
+                        • <strong>Typical:</strong> 0.1-1ms on modern hardware<br>
+                        • <strong>Note:</strong> Usually NOT the bottleneck - ESP32 or network usually is
+                    </div>
+                </div>
+                
+                <div class="metric">
+                    <span class="metric-name">🔧 Quick Fixes</span> - Common optimizations
+                    <div class="metric-values">
+                        <strong>If Jitter is HIGH (>0.5s):</strong><br>
+                        1. Increase ESP32 video interval (500ms → 1000ms)<br>
+                        2. Reduce image resolution (240x240 → 176x144)<br>
+                        3. Lower JPEG quality (10 → 6)<br><br>
+                        
+                        <strong>If Efficiency is LOW (&lt;70%):</strong><br>
+                        1. ESP32 can't keep up - increase interval<br>
+                        2. Check WiFi signal strength<br>
+                        3. Reduce frame size/quality<br><br>
+                        
+                        <strong>If Processing is SLOW (>50ms):</strong><br>
+                        1. Server overloaded - close other apps<br>
+                        2. Upgrade server hardware<br>
+                        3. Check network speed (rare issue)
+                    </div>
+                </div>
+            </div>
+            
+            <div class="help-section" style="background: #2d5016;">
+                <h3>🎮 Video Frame Rate Control</h3>
+                
+                <div style="margin-bottom: 15px; padding: 10px; background: #1a1a1a; border-radius: 5px;">
+                    <strong>Current Interval:</strong> <span id="currentInterval" style="color: #4CAF50;">1000ms</span>
+                    <span id="currentFpsControl" style="color: #999;">(1.0 FPS)</span>
+                </div>
+                
+                <div style="margin-bottom: 10px;">
+                    <button onclick="adjustInterval(-500)" style="margin: 5px; padding: 8px 15px; background: #e67e22; border: none; color: white; border-radius: 5px; cursor: pointer;">⬇️ Slower (-500ms)</button>
+                    <button onclick="adjustInterval(-100)" style="margin: 5px; padding: 8px 15px; background: #e67e22; border: none; color: white; border-radius: 5px; cursor: pointer;">⬇️ -100ms</button>
+                    <button onclick="adjustInterval(100)" style="margin: 5px; padding: 8px 15px; background: #27ae60; border: none; color: white; border-radius: 5px; cursor: pointer;">⬆️ +100ms</button>
+                    <button onclick="adjustInterval(500)" style="margin: 5px; padding: 8px 15px; background: #27ae60; border: none; color: white; border-radius: 5px; cursor: pointer;">⬆️ Faster (+500ms)</button>
+                </div>
+                
+                <div style="margin-bottom: 10px;">
+                    <strong style="display: block; margin-bottom: 5px;">Quick Presets:</strong>
+                    <button onclick="setIntervalValue(500)" style="margin: 5px; padding: 8px 15px; background: #3498db; border: none; color: white; border-radius: 5px; cursor: pointer;">0.5s (2.0 FPS)</button>
+                    <button onclick="setIntervalValue(1000)" style="margin: 5px; padding: 8px 15px; background: #3498db; border: none; color: white; border-radius: 5px; cursor: pointer;">1.0s (1.0 FPS)</button>
+                    <button onclick="setIntervalValue(2000)" style="margin: 5px; padding: 8px 15px; background: #3498db; border: none; color: white; border-radius: 5px; cursor: pointer;">2.0s (0.5 FPS)</button>
+                    <button onclick="setIntervalValue(5000)" style="margin: 5px; padding: 8px 15px; background: #3498db; border: none; color: white; border-radius: 5px; cursor: pointer;">5.0s (0.2 FPS)</button>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <strong style="display: block; margin-bottom: 5px;">Custom Interval (100-10000ms):</strong>
+                    <input type="range" id="intervalSlider" min="100" max="10000" value="1000" step="100" style="width: 70%; vertical-align: middle;">
+                    <button onclick="setIntervalFromSlider()" style="margin-left: 10px; padding: 8px 15px; background: #9b59b6; border: none; color: white; border-radius: 5px; cursor: pointer;">Apply</button>
+                </div>
+                
+                <div style="margin-top: 10px; padding: 8px; background: #1a1a1a; border-radius: 5px; font-size: 12px; color: #bdc3c7;">
+                    💡 <strong>Note:</strong> Changes are sent to ESP32 in real-time via WebSocket. Interval resets when ESP32 reboots.
+                </div>
+            </div>
         </div>
         
         <script>
+            let currentIntervalMs = 1000;
+            
+            function adjustInterval(delta) {{
+                let newInterval = currentIntervalMs + delta;
+                setIntervalValue(newInterval);
+            }}
+            
+            function setIntervalValue(intervalMs) {{
+                // Clamp to valid range
+                intervalMs = Math.max(100, Math.min(10000, intervalMs));
+                
+                fetch('/set_video_interval', {{
+                    method: 'POST',
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{interval_ms: intervalMs}})
+                }})
+                .then(response => response.json())
+                .then(data => {{
+                    if (data.status === 'success') {{
+                        currentIntervalMs = intervalMs;
+                        updateIntervalDisplay();
+                        console.log('✅ Video interval updated:', intervalMs, 'ms');
+                    }} else {{
+                        console.error('❌ Failed to update interval:', data.message);
+                        alert('Failed: ' + data.message);
+                    }}
+                }})
+                .catch(err => {{
+                    console.error('❌ Network error:', err);
+                    alert('Network error - ESP32 may not be connected');
+                }});
+            }}
+            
+            function setIntervalFromSlider() {{
+                let slider = document.getElementById('intervalSlider');
+                setIntervalValue(parseInt(slider.value));
+            }}
+            
+            function updateIntervalDisplay() {{
+                let fps = (1000.0 / currentIntervalMs).toFixed(2);
+                document.getElementById('currentInterval').textContent = currentIntervalMs + 'ms';
+                document.getElementById('currentFpsControl').textContent = '(' + fps + ' FPS)';
+                document.getElementById('intervalSlider').value = currentIntervalMs;
+            }}
+            
+            // Update display on page load
+            updateIntervalDisplay();
+            
             // Auto-refresh image every 2 seconds
             setInterval(function() {{
                 var img = document.getElementById('cameraFeed');
@@ -1370,6 +1552,36 @@ def video_stats():
         perf_stats['resolution'] = f'{actual_frame_width}x{actual_frame_height}' if actual_frame_width > 0 else 'Unknown'
     
     return jsonify(perf_stats)
+
+@app.route('/set_video_interval', methods=['POST'])
+def set_video_interval():
+    """Set ESP32 video frame send interval in real-time (jwc 25-1210-0700)"""
+    data = request.get_json()
+    interval_ms = data.get('interval_ms', 1000)
+    
+    # Validate range (100ms to 10s)
+    if interval_ms < 100 or interval_ms > 10000:
+        return jsonify({'status': 'error', 'message': 'Interval must be 100-10000ms'}), 400
+    
+    # Send command to ESP32 via WebSocket
+    command = {
+        'event': 'set_video_interval',
+        'interval_ms': interval_ms
+    }
+    
+    with websocket_lock:
+        if len(websocket_clients['esp32']) > 0:
+            for ws in websocket_clients['esp32']:
+                try:
+                    ws.send(json.dumps(command))
+                    print(f"📤 SEND to ESP32: set_video_interval={interval_ms}ms ({1000.0/interval_ms:.2f} FPS)")
+                except Exception as e:
+                    print(f"❌ Failed to send interval command: {e}")
+                    pass
+            return jsonify({'status': 'success', 'interval_ms': interval_ms, 'fps': round(1000.0/interval_ms, 2)})
+        else:
+            print("⚠️  ESP32 not connected - cannot set video interval")
+            return jsonify({'status': 'error', 'message': 'ESP32 not connected'}), 503
 
 # ============================================================================
 # MAIN
