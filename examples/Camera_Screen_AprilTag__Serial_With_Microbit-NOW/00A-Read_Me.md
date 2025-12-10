@@ -48,8 +48,8 @@ This system includes an automated startup script that launches everything you ne
 
 ```bash
 cd examples/Camera_Screen_AprilTag__Serial_With_Microbit-NOW/
-chmod +x 00B-Run_Me.sh
-./00B-Run_Me.sh
+chmod +x 00-Run_Me.sh
+./00-Run_Me.sh
 ```
 
 ### What It Does
@@ -139,7 +139,7 @@ pio device monitor -e Camera_Screen_AprilTag__Serial_With_Microbit-NOW__Esp32_Cl
 
 ### WiFi Settings (ESP32)
 
-Edit `01-Esp32-Client/01B-Camera_Screen_AprilTag__Serial_With_Microbit-HttpToWebsocket-NOW.ino.cpp`:
+Edit `01-Esp32-Client/01-Camera_Screen_AprilTag__Serial_With_Microbit-HttpToWebsocket-NOW.ino.cpp`:
 
 ```cpp
 const char* WIFI_SSID = "Chan-Comcast";  // Your WiFi name
@@ -150,7 +150,7 @@ const char* WIFI_PASSWORD = "Jesus333!"; // Your WiFi password
 
 Update both ESP32 and GDevelop client:
 
-**ESP32** (`01B-Camera_Screen_AprilTag__Serial_With_Microbit-HttpToWebsocket-NOW.ino.cpp`):
+**ESP32** (`01-Camera_Screen_AprilTag__Serial_With_Microbit-HttpToWebsocket-NOW.ino.cpp`):
 ```cpp
 const char* WS_HOST = "10.0.0.149";  // Your Ubuntu server IP
 ```
@@ -163,7 +163,7 @@ const VIDEO_URL = 'http://10.0.0.149:5000/video_stream';
 
 ### Timing Configuration (ESP32)
 
-Adjust FPS/performance in `01B-Camera_Screen_AprilTag__Serial_With_Microbit-HttpToWebsocket-NOW.ino.cpp`:
+Adjust FPS/performance in `01-Camera_Screen_AprilTag__Serial_With_Microbit-HttpToWebsocket-NOW.ino.cpp`:
 
 ```cpp
 // AprilTag data send rate (WebSocket)
