@@ -38,6 +38,27 @@ SERVER_PORT = 5000
 SERVER_HOST = '0.0.0.0'
 
 # ============================================================================
+# VIDEO PERFORMANCE MONITORING CONFIGURATION (jwc 25-1209-1600)
+# ============================================================================
+# These constants are OPTIONAL overrides for performance monitoring.
+# If set to None, the system auto-detects target FPS from actual traffic.
+#
+# ⚙️ AUTO-DETECT MODE (Recommended):
+#    Set ESP32_VIDEO_INTERVAL_MS_EXPECTED = None
+#    Server learns target FPS from incoming video stream (median of last 20 frames)
+#    Benefits: Zero configuration, adapts to ESP32 changes automatically
+#
+# 🔧 MANUAL OVERRIDE MODE:
+#    Set ESP32_VIDEO_INTERVAL_MS_EXPECTED = 1000 (or your configured value)
+#    Server compares actual FPS to this fixed target
+#    Benefits: Useful for testing/debugging, explicit performance targets
+#
+# Current setting: AUTO-DETECT (None = learns from traffic)
+#
+MILLISECONDS_PER_SECOND = 1000.0  # Conversion constant (ms to seconds)
+ESP32_VIDEO_INTERVAL_MS_EXPECTED = None  # None = auto-detect, 1000 = 1.0 FPS manual target
+
+# ============================================================================
 # SECURITY CONFIGURATION
 # ============================================================================
 # Authentication token - MUST MATCH ESP32's AUTH_TOKEN
@@ -112,6 +133,157 @@ video_fps_lock = threading.Lock()  # Thread-safe FPS calculation
 actual_frame_width = 0
 actual_frame_height = 0
 frame_dimensions_lock = threading.Lock()
+
+# Video performance metrics (jwc 25-1209-1310 - FPS optimization debugging)
+class VideoPerformanceMetrics:
+    """Track detailed video streaming performance for optimization"""
+    def __init__(self):
+        self.frame_intervals = []  # Time between consecutive frames
+        self.frame_sizes = []      # Frame sizes in bytes
+        self.processing_times = [] # Time to process each frame
+        self.last_frame_time = 0
+        self.total_frames = 0
+        self.dropped_frames = 0
+        self.lock = threading.Lock()
+        self.MAX_SAMPLES = 20  # Keep last 20 measurements
+    
+    def record_frame(self, size_bytes, processing_time_ms):
+        """Record frame reception with detailed metrics"""
+        current_time = time.time()
+        
+        with self.lock:
+            # Calculate interval since last frame
+            if self.last_frame_time > 0:
+                interval = current_time - self.last_frame_time
+                self.frame_intervals.append(interval)
+                if len(self.frame_intervals) > self.MAX_SAMPLES:
+                    self.frame_intervals.pop(0)
+            
+            self.last_frame_time = current_time
+            self.total_frames += 1
+            
+            # Track frame size
+            self.frame_sizes.append(size_bytes)
+            if len(self.frame_sizes) > self.MAX_SAMPLES:
+                self.frame_sizes.pop(0)
+            
+            # Track processing time
+            self.processing_times.append(processing_time_ms)
+            if len(self.processing_times) > self.MAX_SAMPLES:
+                self.processing_times.pop(0)
+    
+    def get_stats(self):
+        """Get comprehensive performance statistics"""
+        with self.lock:
+            if not self.frame_intervals:
+                return {
+                    'avg_interval': 0, 'min_interval': 0, 'max_interval': 0,
+                    'jitter': 0, 'avg_fps': 0, 'target_fps': 0,
+                    'avg_size': 0, 'min_size': 0, 'max_size': 0,
+                    'avg_processing': 0, 'max_processing': 0,
+                    'total_frames': 0, 'dropped_frames': 0,
+                    'efficiency': 0, 'recommendation': 'WAITING_FOR_DATA'
+                }
+            
+            # Interval statistics (seconds)
+            avg_interval = sum(self.frame_intervals) / len(self.frame_intervals)
+            min_interval = min(self.frame_intervals)
+            max_interval = max(self.frame_intervals)
+            
+            # Calculate jitter (standard deviation of intervals)
+            mean_interval = avg_interval
+            variance = sum((x - mean_interval) ** 2 for x in self.frame_intervals) / len(self.frame_intervals)
+            jitter = variance ** 0.5
+            
+            # FPS calculations with dynamic target detection (jwc 25-1209-1600)
+            avg_fps = 1.0 / avg_interval if avg_interval > 0 else 0
+            
+            # Determine target FPS: auto-detect (median) or manual override
+            if ESP32_VIDEO_INTERVAL_MS_EXPECTED is None:
+                # AUTO-DETECT MODE: Use median interval as target (robust to outliers)
+                if len(self.frame_intervals) >= 10:
+                    # Enough data - use median
+                    sorted_intervals = sorted(self.frame_intervals)
+                    median_interval = sorted_intervals[len(sorted_intervals) // 2]
+                    target_interval = median_interval
+                    target_source = "auto_detected"
+                else:
+                    # Not enough data yet - use current average
+                    target_interval = avg_interval
+                    target_source = "insufficient_data"
+                
+                target_fps = 1.0 / target_interval if target_interval > 0 else 0
+                
+                # Efficiency = consistency (how stable is delivery vs median?)
+                # Compare average deviation from median
+                if len(self.frame_intervals) >= 10:
+                    deviation_from_median = abs(avg_interval - median_interval)
+                    consistency_pct = (1.0 - (deviation_from_median / median_interval)) * 100
+                    efficiency = max(0, min(100, consistency_pct))  # Clamp 0-100%
+                else:
+                    efficiency = 50.0  # Neutral until we have enough data
+            else:
+                # MANUAL OVERRIDE MODE: Use configured target
+                target_interval = ESP32_VIDEO_INTERVAL_MS_EXPECTED / MILLISECONDS_PER_SECOND
+                target_fps = MILLISECONDS_PER_SECOND / ESP32_VIDEO_INTERVAL_MS_EXPECTED
+                target_source = "configured"
+                
+                # Efficiency = how close actual FPS is to configured target
+                efficiency = (avg_fps / target_fps * 100) if target_fps > 0 else 0
+            
+            # Size statistics (bytes)
+            avg_size = sum(self.frame_sizes) / len(self.frame_sizes)
+            min_size = min(self.frame_sizes)
+            max_size = max(self.frame_sizes)
+            
+            # Processing statistics (milliseconds)
+            avg_processing = sum(self.processing_times) / len(self.processing_times)
+            max_processing = max(self.processing_times)
+            
+            # Generate recommendation
+            recommendation = self._generate_recommendation(
+                avg_fps, target_fps, jitter, avg_processing, efficiency
+            )
+            
+            return {
+                'avg_interval': round(avg_interval, 3),
+                'min_interval': round(min_interval, 3),
+                'max_interval': round(max_interval, 3),
+                'jitter': round(jitter, 3),
+                'avg_fps': round(avg_fps, 3),
+                'target_fps': round(target_fps, 1),
+                'avg_size': int(avg_size),
+                'min_size': int(min_size),
+                'max_size': int(max_size),
+                'avg_processing': round(avg_processing, 2),
+                'max_processing': round(max_processing, 2),
+                'total_frames': self.total_frames,
+                'dropped_frames': self.dropped_frames,
+                'efficiency': round(efficiency, 1),
+                'recommendation': recommendation
+            }
+    
+    def _generate_recommendation(self, avg_fps, target_fps, jitter, avg_processing, efficiency):
+        """Generate tuning recommendation based on metrics"""
+        if efficiency > 95:
+            return "OPTIMAL - System performing excellently"
+        elif efficiency > 85:
+            return "GOOD - Minor tuning could improve performance"
+        elif efficiency > 70:
+            if jitter > 0.5:
+                return "UNSTABLE - High jitter detected, consider increasing interval"
+            else:
+                return "FAIR - Consider adjusting ESP32 send interval"
+        else:
+            if avg_processing > 50:
+                return "SLOW - Server processing bottleneck, optimize code"
+            elif jitter > 1.0:
+                return "UNSTABLE - Network issues, increase ESP32 interval significantly"
+            else:
+                return "POOR - Check ESP32 configuration and network quality"
+
+# Global performance tracker
+video_perf = VideoPerformanceMetrics()
 
 # Legacy FIFO queue (HTTP compatibility)
 tagData_List_Fifo = []
@@ -525,12 +697,23 @@ def websocket(ws):
                         # Record video timing
                         timing_monitor.record_video()
                         
+                        # Record performance metrics (jwc 25-1209-1310)
+                        processing_time_ms = (time.time() - current_time) * 1000
+                        video_perf.record_frame(len(jpeg_data), processing_time_ms)
+                        
                         # Get current dimensions for logging
                         with frame_dimensions_lock:
                             width_log = actual_frame_width
                             height_log = actual_frame_height
                         
+                        # Get performance stats for enhanced debug output
+                        perf_stats = video_perf.get_stats()
+                        
                         print(f"🟢-->> RECV ESP32: video_frame (WebSocket Binary) | 📹 {len(jpeg_data)} bytes {width_log}x{height_log} (#{stats['video_frames']}) FPS={calculated_fps:.2f}")
+                        print(f"      📊 PERF: Interval={perf_stats['avg_interval']:.3f}s (min={perf_stats['min_interval']:.3f}s max={perf_stats['max_interval']:.3f}s) Jitter={perf_stats['jitter']:.3f}s")
+                        print(f"      📊 SIZE: {perf_stats['avg_size']}B avg (min={perf_stats['min_size']}B max={perf_stats['max_size']}B)")
+                        print(f"      📊 PROC: {perf_stats['avg_processing']:.2f}ms avg (max={perf_stats['max_processing']:.2f}ms)")
+                        print(f"      🎯 TUNE: Efficiency={perf_stats['efficiency']:.1f}% | {perf_stats['recommendation']}")
                         
                         # Optional: Send acknowledgment to ESP32
                         # ack_msg = {'event': 'video_ack', 'status': 'received', 'size': len(jpeg_data)}
@@ -833,12 +1016,35 @@ def video_viewer():
                     <span id="actualFps">Calculating...</span>
                 </div>
                 <div class="stats-row">
+                    <strong>📊 Efficiency:</strong>
+                    <span id="efficiency">Calculating...</span>
+                    <span id="efficiencyHelp" style="font-size: 11px; color: #999; margin-left: 8px;"></span>
+                </div>
+                <div class="stats-row">
+                    <strong>🎯 Jitter:</strong>
+                    <span id="jitter">Calculating...</span>
+                    <span id="jitterHelp" style="font-size: 11px; color: #999; margin-left: 8px;"></span>
+                </div>
+                <div class="stats-row">
+                    <strong>📦 Frame Size:</strong>
+                    <span id="frameSize">Calculating...</span>
+                </div>
+                <div class="stats-row">
+                    <strong>⚙️  Processing:</strong>
+                    <span id="processing">Calculating...</span>
+                    <span id="processingHelp" style="font-size: 11px; color: #999; margin-left: 8px;"></span>
+                </div>
+                <div class="stats-row">
                     <strong>📡 Server:</strong>
                     <span>{SERVER_HOST}:{SERVER_PORT}</span>
                 </div>
                 <div class="stats-row">
-                    <strong>⏱️ Frame Age:</strong>
+                    <strong>⏱️  Frame Age:</strong>
                     <span id="latency">Calculating...</span>
+                </div>
+                <div class="stats-row" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #444;">
+                    <strong>💡 Recommendation:</strong>
+                    <span id="recommendation" style="font-size: 12px;">Calculating...</span>
                 </div>
             </div>
         </div>
@@ -850,7 +1056,7 @@ def video_viewer():
                 img.src = '/photo?t=' + new Date().getTime();
             }}, 2000);
             
-            // Update all stats every second (jwc 25-1206-1430, enhanced jwc 25-1207-0130)
+            // Update all stats every second (jwc 25-1206-1430, enhanced jwc 25-1207-0130, jwc 25-1209-1430)
             function updateStats() {{
                 // Fetch frame age from headers
                 fetch('/photo')
@@ -862,7 +1068,7 @@ def video_viewer():
                     }})
                     .catch(err => console.log('Frame age fetch error:', err));
                 
-                // Fetch ALL dynamic stats from API (FPS, resolution, target FPS)
+                // Fetch basic FPS data
                 fetch('/video_fps')
                     .then(response => response.json())
                     .then(data => {{
@@ -887,6 +1093,105 @@ def video_viewer():
                             data.fps.toFixed(2) + ' FPS';
                     }})
                     .catch(err => console.log('Stats fetch error:', err));
+                
+                // Fetch comprehensive performance stats from /video_stats
+                fetch('/video_stats')
+                    .then(response => response.json())
+                    .then(data => {{
+                        // Update efficiency with color coding and help text
+                        const efficiency = data.efficiency || 0;
+                        let effColor = '#e74c3c';  // Red for poor
+                        let effHelp = 'POOR';
+                        
+                        if (efficiency > 95) {{
+                            effColor = '#3498db';  // Blue for optimal
+                            effHelp = 'OPTIMAL';
+                        }} else if (efficiency > 85) {{
+                            effColor = '#27ae60';  // Green for good
+                            effHelp = 'GOOD';
+                        }} else if (efficiency > 70) {{
+                            effColor = '#f39c12';  // Orange for fair
+                            effHelp = 'FAIR';
+                        }}
+                        
+                        document.getElementById('efficiency').innerHTML = 
+                            '<span style="color:' + effColor + '">' + efficiency.toFixed(1) + '%</span>';
+                        document.getElementById('efficiencyHelp').innerHTML = 
+                            '<span style="color:' + effColor + '">(' + effHelp + ')</span>';
+                        
+                        // Update jitter with help text
+                        const jitter = data.jitter || 0;
+                        let jitterHelp = '';
+                        let jitterColor = '#27ae60';  // Green by default
+                        
+                        if (jitter < 0.1) {{
+                            jitterHelp = '(EXCELLENT)';
+                            jitterColor = '#3498db';
+                        }} else if (jitter < 0.3) {{
+                            jitterHelp = '(GOOD)';
+                            jitterColor = '#27ae60';
+                        }} else if (jitter < 0.5) {{
+                            jitterHelp = '(OK)';
+                            jitterColor = '#f39c12';
+                        }} else {{
+                            jitterHelp = '(HIGH)';
+                            jitterColor = '#e74c3c';
+                        }}
+                        
+                        document.getElementById('jitter').textContent = 
+                            data.jitter ? data.jitter.toFixed(3) + 's' : 'N/A';
+                        document.getElementById('jitterHelp').innerHTML = 
+                            '<span style="color:' + jitterColor + '">' + jitterHelp + '</span>';
+                        
+                        // Update frame size
+                        const avgSize = data.avg_size || 0;
+                        const sizeKB = (avgSize / 1024).toFixed(1);
+                        document.getElementById('frameSize').textContent = 
+                            avgSize + 'B (' + sizeKB + 'KB) avg';
+                        
+                        // Update processing time with help text
+                        const avgProc = data.avg_processing || 0;
+                        let procHelp = '';
+                        let procColor = '#27ae60';
+                        
+                        if (avgProc < 1) {{
+                            procHelp = '(FAST)';
+                            procColor = '#3498db';
+                        }} else if (avgProc < 10) {{
+                            procHelp = '(GOOD)';
+                            procColor = '#27ae60';
+                        }} else if (avgProc < 50) {{
+                            procHelp = '(OK)';
+                            procColor = '#f39c12';
+                        }} else {{
+                            procHelp = '(SLOW)';
+                            procColor = '#e74c3c';
+                        }}
+                        
+                        document.getElementById('processing').textContent = 
+                            (data.avg_processing || 0).toFixed(2) + 'ms avg (max: ' + 
+                            (data.max_processing || 0).toFixed(2) + 'ms)';
+                        document.getElementById('processingHelp').innerHTML = 
+                            '<span style="color:' + procColor + '">' + procHelp + '</span>';
+                        
+                        // Update recommendation with color coding
+                        const rec = data.recommendation || 'Waiting for data...';
+                        let recColor = '#bdc3c7';  // Gray default
+                        
+                        if (rec.includes('OPTIMAL')) {{
+                            recColor = '#3498db';  // Blue
+                        }} else if (rec.includes('GOOD')) {{
+                            recColor = '#27ae60';  // Green
+                        }} else if (rec.includes('FAIR')) {{
+                            recColor = '#f39c12';  // Orange
+                        }} else if (rec.includes('UNSTABLE') || rec.includes('SLOW') || rec.includes('POOR')) {{
+                            recColor = '#e74c3c';  // Red
+                        }}
+                        
+                        document.getElementById('recommendation').innerHTML = 
+                            '<span style="color:' + recColor + '">' + rec + '</span>';
+                    }})
+                    .catch(err => console.log('Performance stats fetch error:', err));
             }}
             
             // Update stats immediately and then every second
@@ -1022,7 +1327,8 @@ def status():
 
 @app.route('/video_fps')
 def video_fps():
-    """JSON endpoint for video FPS data (jwc 25-1206-1430) and dimensions (jwc 25-1207-0130)"""
+    """JSON endpoint for video FPS data (jwc 25-1206-1430) and dimensions (jwc 25-1207-0130)
+    Updated (jwc 25-1209-1700): Now uses dynamic target FPS from performance metrics (auto-detected)"""
     with video_fps_lock:
         current_fps = calculated_fps
     
@@ -1030,22 +1336,40 @@ def video_fps():
         width = actual_frame_width
         height = actual_frame_height
     
-    # CONFIGURED target values from ESP32 code (VideoFrame_Send_INTERVAL_MS = 5000ms)
-    # These are the CONSTANT settings, not measured values
-    # ⚠️ IMPORTANT: Keep this in sync with ESP32 code constant!
-    #    ESP32 File: 01B-Camera_Screen_AprilTag__Serial_With_Microbit-HttpToWebsocket-NOW.ino.cpp
-    #    ESP32 Line: ~230: const unsigned long VideoFrame_Send_INTERVAL_MS = 5000;
-    TARGET_INTERVAL_MS = 5000  # From ESP32: const unsigned long VideoFrame_Send_INTERVAL_MS = 5000
-    TARGET_FPS = 1000.0 / TARGET_INTERVAL_MS  # 1000ms / 5000ms = 0.2 FPS
+    # Get dynamic target FPS from performance metrics (auto-detected from actual traffic)
+    # This replaces the old hardcoded TARGET_INTERVAL_MS approach
+    perf_stats = video_perf.get_stats()
+    target_fps = perf_stats.get('target_fps', 0)
+    
+    # Calculate interval from target FPS for display purposes
+    # 1000.0 = milliseconds per second (conversion factor: FPS → ms interval)
+    # Example: 2.0 FPS → 1000.0 / 2.0 = 500ms interval
+    interval_ms = int(1000.0 / target_fps) if target_fps > 0 else 0
     
     return jsonify({
         'fps': round(current_fps, 2),
-        'target_fps': round(TARGET_FPS, 1),
-        'interval_ms': TARGET_INTERVAL_MS,
+        'target_fps': round(target_fps, 1),
+        'interval_ms': interval_ms,
         'width': width,
         'height': height,
         'resolution': f'{width}x{height}' if width > 0 and height > 0 else 'Unknown'
     })
+
+@app.route('/video_stats')
+def video_stats():
+    """JSON endpoint for comprehensive video performance statistics (jwc 25-1209-1310)"""
+    perf_stats = video_perf.get_stats()
+    
+    # Add basic FPS and dimensions data
+    with video_fps_lock:
+        perf_stats['current_fps'] = round(calculated_fps, 2)
+    
+    with frame_dimensions_lock:
+        perf_stats['width'] = actual_frame_width
+        perf_stats['height'] = actual_frame_height
+        perf_stats['resolution'] = f'{actual_frame_width}x{actual_frame_height}' if actual_frame_width > 0 else 'Unknown'
+    
+    return jsonify(perf_stats)
 
 # ============================================================================
 # MAIN
