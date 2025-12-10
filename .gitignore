@@ -14,7 +14,7 @@
 ###
 ### KWC 25-1207-0920 \/\/ 9Z-ARCHIVE-BAD/*
 ### KWC 25-1207-0920 \/\/ */99-ARCHIVE-GOOD/*
-**/*ARCHIVE**/
+**/*ARCHIVE*/
 
 ### venv/
 ###
