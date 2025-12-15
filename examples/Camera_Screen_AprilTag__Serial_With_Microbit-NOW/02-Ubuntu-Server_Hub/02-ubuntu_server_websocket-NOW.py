@@ -1190,7 +1190,19 @@ def video_viewer():
         </div>
         
         <script>
-            let currentIntervalMs = 1000;
+            let currentIntervalMs = 0;  // Initialize to 0 (will be loaded from ESP32)
+            
+            // Fetch actual interval from ESP32 on page load
+            fetch('/video_fps')
+                .then(response => response.json())
+                .then(data => {{
+                    if (data.interval_ms > 0) {{
+                        currentIntervalMs = data.interval_ms;
+                        updateIntervalDisplay();
+                        console.log('✅ Loaded actual ESP32 interval:', currentIntervalMs, 'ms');
+                    }}
+                }})
+                .catch(err => console.log('Initial interval fetch error:', err));
             
             function adjustInterval(delta) {{
                 let newInterval = currentIntervalMs + delta;
