@@ -332,6 +332,56 @@ echo ""
 # ============================================================================
 # Step 4: Upload ESP32 Code FIRST (Before Server Starts)
 # ============================================================================
+# 
+# TERMINAL WINDOW LAYOUT (Tiled Configuration)
+# ============================================================================
+# 
+# The script launches 3 terminal windows arranged in a tiled layout:
+# 
+# Layout Diagram (assuming 1920x1080 screen):
+# 
+#   ┌─────────────────────┬─────────────────────┐
+#   │                     │                     │
+#   │  ESP32 Client       │  Ubuntu Server      │
+#   │  (Serial Monitor)   │  (WebSocket)        │
+#   │                     │                     │
+#   │  Upper-Left Half    │  Full Right Half    │
+#   │  80x25+0+0          │  100x50+960+0       │
+#   │                     │                     │
+#   ├─────────────────────┤                     │
+#   │                     │                     │
+#   │  GDevelop Server    │                     │
+#   │  (HTTP Game)        │                     │
+#   │                     │                     │
+#   │  Bottom-Left Half   │                     │
+#   │  80x25+0+540        │                     │
+#   │                     │                     │
+#   └─────────────────────┴─────────────────────┘
+# 
+# Window Specifications:
+# 
+# 1. ESP32 Client - Upper-left-half
+#    Geometry: 80x25+0+0 (width x height + x_offset + y_offset)
+#    Position: Top-left corner (X=0, Y=0)
+#    Shows: ESP32 upload progress and serial debug output
+# 
+# 2. Ubuntu Server - Full-right-half  
+#    Geometry: 100x50+960+0
+#    Position: Right side (X=960, Y=0), full height
+#    Shows: WebSocket server logs, AprilTag data, video frame stats
+# 
+# 3. GDevelop Server - Bottom-left-half
+#    Geometry: 80x25+0+540
+#    Position: Bottom-left (X=0, Y=540)
+#    Shows: HTTP server for the GDevelop game (port 5100)
+# 
+# Notes:
+# - Geometry format: WIDTHxHEIGHT+X_OFFSET+Y_OFFSET
+# - Coordinates assume typical 1920x1080 display
+# - Adjust if using different screen resolution
+# - Y=540 accounts for ~25 lines * ~21 pixels per line + window decorations
+# 
+# ============================================================================
 echo -e "${YELLOW}[4/7] Flashing ESP32 Client FIRST...${NC}"
 echo -e "${YELLOW}⚠️  IMPORTANT: ESP32 must be flashed with new code BEFORE server starts${NC}"
 echo -e "${YELLOW}   This prevents old ESP32 code from connecting with invalid data${NC}"
@@ -389,12 +439,13 @@ EOF
 chmod +x "$ESP32_LAUNCHER"
 
 # Launch ESP32 in new terminal (with clean environment to avoid snap library conflicts)
+# GEOMETRY: Upper-left-half of screen
 env -i HOME="$HOME" USER="$USER" PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" \
     XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
     DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" \
     gnome-terminal --title="ESP32 Client - Serial Monitor" \
-                   --geometry=120x40+600+0 \
+                   --geometry=80x25+0+0 \
                    -- bash -c "$ESP32_LAUNCHER" &
 
 echo -e "${GREEN}✓ ESP32 flash started in separate terminal${NC}"
@@ -449,12 +500,13 @@ chmod +x "$SERVER_LAUNCHER"
 
 # Launch server in new terminal (with clean environment to avoid snap library conflicts)
 # Fix for: "symbol lookup error: /snap/core20/current/lib/x86_64-linux-gnu/libpthread.so.0: undefined symbol: __libc_pthread_init"
+# GEOMETRY: Full-right-half of screen
 env -i HOME="$HOME" USER="$USER" PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
     DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" \
     XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
     DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" \
     gnome-terminal --title="Ubuntu WebSocket Server" \
-                   --geometry=100x30+0+0 \
+                   --geometry=100x50+960+0 \
                    -- bash -c "$SERVER_LAUNCHER" &
 
 echo -e "${GREEN}✓ Ubuntu Server launched (AFTER ESP32 flash)${NC}"
@@ -503,12 +555,13 @@ EOF
     chmod +x "$GDEVELOP_LAUNCHER"
 
     # Launch GDevelop in new terminal
+    # GEOMETRY: Bottom-left-half of screen
     env -i HOME="$HOME" USER="$USER" PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin" \
         DBUS_SESSION_BUS_ADDRESS="$DBUS_SESSION_BUS_ADDRESS" \
         XDG_RUNTIME_DIR="$XDG_RUNTIME_DIR" \
         DISPLAY="$DISPLAY" XAUTHORITY="$XAUTHORITY" \
         gnome-terminal --title="GDevelop Game Server" \
-                       --geometry=80x20+0+400 \
+                       --geometry=80x25+0+540 \
                        -- bash -c "$GDEVELOP_LAUNCHER" &
 
     echo -e "${GREEN}✓ GDevelop Game Server launched in separate terminal${NC}"

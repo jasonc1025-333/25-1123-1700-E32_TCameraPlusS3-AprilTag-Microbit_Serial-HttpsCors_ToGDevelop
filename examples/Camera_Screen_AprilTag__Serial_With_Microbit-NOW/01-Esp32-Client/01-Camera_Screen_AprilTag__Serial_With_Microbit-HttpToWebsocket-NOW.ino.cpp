@@ -310,7 +310,8 @@ const unsigned long AprilTag_Send_INTERVAL_MS = 1000;  // 1.0s = 1.0 FPS ✅ CON
 //// jwc 25-1207-1900 User requested: 0.2 FPS for video streaming (more conservative due to timeout issues)
 //// jwc 25-1209-1600 ARCHIVED (too fast, high jitter): const unsigned long VideoFrame_Send_INTERVAL_MS = 500;  // 0.5s = 2.0 FPS
 //// jwc 25-1210-0750 Changed to non-const to allow real-time updates from web interface
-unsigned long VideoFrame_Send_INTERVAL_MS = 1000;  // 1.0s = 1.0 FPS ✅ STABILITY OPTIMIZED (can be changed via WebSocket)
+//// jwc 25-1215-1245 ARCHIVED (1.0 FPS): unsigned long VideoFrame_Send_INTERVAL_MS = 1000;  // 1.0s = 1.0 FPS
+unsigned long VideoFrame_Send_INTERVAL_MS = 2000;  // 2.0s = 0.5 FPS ✅ DEFAULT CONSERVATIVE (can be changed via WebSocket)
 // jwc 25-1209-2330 Changed from 500ms to 1000ms (2× slower but more stable - reduces jitter from 600ms to <100ms)
 // Testing 2.0 FPS based on FPS analysis showing system can handle higher rates:
 //   - Measured at 1000ms: 0.81 FPS actual (81% of 1.0 FPS target)
@@ -351,7 +352,7 @@ unsigned long VideoFrame_Send_INTERVAL_MS = 1000;  // 1.0s = 1.0 FPS ✅ STABILI
 // 📊 SUMMARY - Current Configuration:
 //    - AprilTag Capture:  1.0 FPS (every 1000ms via AprilTag_Capture_INTERVAL_MS)
 //    - AprilTag Send:     1.0 FPS (every 1000ms via AprilTag_Send_INTERVAL_MS)
-//    - Video Frame Send:  0.2 FPS (every 5000ms via VideoFrame_Send_INTERVAL_MS)
+//    - Video Frame Send:  0.5 FPS (every 2000ms via VideoFrame_Send_INTERVAL_MS) ✅ DEFAULT
 //
 // 📸 Camera Hardware (informational - configured elsewhere):
 //    - Camera captures frames continuously (as fast as hardware allows)

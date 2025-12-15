@@ -299,6 +299,7 @@ stats = {
     'video_frames': 0,
     'start_time': time.time(),
     'esp32_connected': False,
+    'esp32_connect_time': 0,  # Track when ESP32 connected
     'gdevelop_clients': 0
 }
 
@@ -483,6 +484,7 @@ def handle_esp32_message(ws, message):
                 if ws not in websocket_clients['esp32']:
                     websocket_clients['esp32'].append(ws)
                     stats['esp32_connected'] = True
+                    stats['esp32_connect_time'] = time.time()  # Track connection time
             
             esp32_name = data.get('data', {}).get('camera_name', 'ESP32-Unknown')
             
@@ -1072,6 +1074,10 @@ def video_viewer():
                     <strong>⏱️  Frame Age:</strong>
                     <span id="latency">Calculating...</span>
                 </div>
+                <div class="stats-row">
+                    <strong>🔌 Connection Uptime:</strong>
+                    <span id="uptime">Not connected</span>
+                </div>
                 <div class="stats-row" style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #444;">
                     <strong>💡 Recommendation:</strong>
                     <span id="recommendation" style="font-size: 12px;">Calculating...</span>
@@ -1157,10 +1163,10 @@ def video_viewer():
                 </div>
                 
                 <div style="margin-bottom: 10px;">
-                    <button onclick="adjustInterval(-500)" style="margin: 5px; padding: 8px 15px; background: #e67e22; border: none; color: white; border-radius: 5px; cursor: pointer;">⬇️ Slower (-500ms)</button>
-                    <button onclick="adjustInterval(-100)" style="margin: 5px; padding: 8px 15px; background: #e67e22; border: none; color: white; border-radius: 5px; cursor: pointer;">⬇️ -100ms</button>
-                    <button onclick="adjustInterval(100)" style="margin: 5px; padding: 8px 15px; background: #27ae60; border: none; color: white; border-radius: 5px; cursor: pointer;">⬆️ +100ms</button>
-                    <button onclick="adjustInterval(500)" style="margin: 5px; padding: 8px 15px; background: #27ae60; border: none; color: white; border-radius: 5px; cursor: pointer;">⬆️ Faster (+500ms)</button>
+                    <button onclick="adjustInterval(-500)" style="margin: 5px; padding: 8px 15px; background: #27ae60; border: none; color: white; border-radius: 5px; cursor: pointer;">⬆️ Faster (-500ms)</button>
+                    <button onclick="adjustInterval(-100)" style="margin: 5px; padding: 8px 15px; background: #27ae60; border: none; color: white; border-radius: 5px; cursor: pointer;">⬆️ Faster (-100ms)</button>
+                    <button onclick="adjustInterval(100)" style="margin: 5px; padding: 8px 15px; background: #e67e22; border: none; color: white; border-radius: 5px; cursor: pointer;">⬇️ Slower (+100ms)</button>
+                    <button onclick="adjustInterval(500)" style="margin: 5px; padding: 8px 15px; background: #e67e22; border: none; color: white; border-radius: 5px; cursor: pointer;">⬇️ Slower (+500ms)</button>
                 </div>
                 
                 <div style="margin-bottom: 10px;">
@@ -1374,6 +1380,20 @@ def video_viewer():
                             '<span style="color:' + recColor + '">' + rec + '</span>';
                     }})
                     .catch(err => console.log('Performance stats fetch error:', err));
+                
+                // Fetch connection uptime (jwc 25-1215-1100)
+                fetch('/connection_uptime')
+                    .then(response => response.json())
+                    .then(data => {{
+                        if (data.connected) {{
+                            document.getElementById('uptime').textContent = data.uptime_formatted;
+                            document.getElementById('uptime').style.color = '#27ae60';  // Green for connected
+                        }} else {{
+                            document.getElementById('uptime').textContent = 'Not connected';
+                            document.getElementById('uptime').style.color = '#e74c3c';  // Red for disconnected
+                        }}
+                    }})
+                    .catch(err => console.log('Uptime fetch error:', err));
             }}
             
             // Update stats immediately and then every second
@@ -1552,6 +1572,46 @@ def video_stats():
         perf_stats['resolution'] = f'{actual_frame_width}x{actual_frame_height}' if actual_frame_width > 0 else 'Unknown'
     
     return jsonify(perf_stats)
+
+@app.route('/connection_uptime')
+def connection_uptime():
+    """JSON endpoint for ESP32 connection uptime (jwc 25-1215-1100)"""
+    if stats['esp32_connected'] and stats['esp32_connect_time'] > 0:
+        uptime_seconds = int(time.time() - stats['esp32_connect_time'])
+        
+        # Convert to days, hours, minutes
+        days = uptime_seconds // 86400
+        hours = (uptime_seconds % 86400) // 3600
+        minutes = (uptime_seconds % 3600) // 60
+        seconds = uptime_seconds % 60
+        
+        # Format string
+        uptime_str = ""
+        if days > 0:
+            uptime_str += f"{days}d "
+        if hours > 0 or days > 0:
+            uptime_str += f"{hours}h "
+        uptime_str += f"{minutes}m"
+        
+        return jsonify({
+            'connected': True,
+            'uptime_seconds': uptime_seconds,
+            'uptime_formatted': uptime_str,
+            'days': days,
+            'hours': hours,
+            'minutes': minutes,
+            'seconds': seconds
+        })
+    else:
+        return jsonify({
+            'connected': False,
+            'uptime_seconds': 0,
+            'uptime_formatted': 'Not connected',
+            'days': 0,
+            'hours': 0,
+            'minutes': 0,
+            'seconds': 0
+        })
 
 @app.route('/set_video_interval', methods=['POST'])
 def set_video_interval():
