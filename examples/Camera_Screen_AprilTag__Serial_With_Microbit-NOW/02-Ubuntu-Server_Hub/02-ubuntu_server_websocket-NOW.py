@@ -1060,7 +1060,7 @@ def video_viewer():
             <h1>📹 ESP32 Camera Live View</h1>
             <div class="info">
                 <span class="status"></span>
-                Auto-refresh every 2 seconds
+                <span id="refreshInfo">Web-updates: Video (dynamic) | Stats 1s</span>
             </div>
             
             <div class="video-container">
@@ -1294,11 +1294,46 @@ def video_viewer():
             // Update display on page load
             updateIntervalDisplay();
             
-            // Auto-refresh image every 2 seconds
-            setInterval(function() {{
+            // Dynamic video refresh based on ESP32 frame rate [jwc 25-1215-1900]
+            let videoRefreshInterval = 2000;  // Default fallback (2s)
+            let videoRefreshTimeout = null;
+            
+            function updateVideoRefreshRate() {{
+                fetch('/video_fps')
+                    .then(response => response.json())
+                    .then(data => {{
+                        if (data.interval_ms > 0) {{
+                            // Refresh at 90% of ESP32 interval (slightly faster to catch all frames)
+                            // Min 500ms to avoid hammering server, max 5000ms to stay responsive
+                            const newInterval = Math.max(500, Math.min(5000, data.interval_ms * 0.9));
+                            
+                            if (Math.abs(newInterval - videoRefreshInterval) > 50) {{
+                                // Only update if change is significant (>50ms)
+                                videoRefreshInterval = newInterval;
+                                const refreshRate = (videoRefreshInterval / 1000).toFixed(1);
+                                document.getElementById('refreshInfo').textContent = 
+                                    'Web-updates: Video ' + refreshRate + 's (auto) | Stats 1s';
+                                console.log('📹 Video refresh adjusted to ' + videoRefreshInterval + 'ms (ESP32 sends at ' + data.interval_ms + 'ms)');
+                            }}
+                        }}
+                    }})
+                    .catch(err => console.log('Video refresh rate update error:', err));
+            }}
+            
+            function refreshVideo() {{
                 var img = document.getElementById('cameraFeed');
                 img.src = '/photo?t=' + new Date().getTime();
-            }}, 2000);
+                
+                // Schedule next refresh based on current dynamic interval
+                videoRefreshTimeout = setTimeout(refreshVideo, videoRefreshInterval);
+            }}
+            
+            // Initialize dynamic video refresh
+            updateVideoRefreshRate();  // Get initial ESP32 rate
+            refreshVideo();  // Start refresh loop
+            
+            // Re-check ESP32 interval every 10 seconds (adapts to user changes)
+            setInterval(updateVideoRefreshRate, 10000);
             
             // Update all stats every second (jwc 25-1206-1430, enhanced jwc 25-1207-0130, jwc 25-1209-1430)
             function updateStats() {{
