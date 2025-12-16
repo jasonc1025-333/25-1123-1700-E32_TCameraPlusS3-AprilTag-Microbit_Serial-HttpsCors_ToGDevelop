@@ -1190,6 +1190,13 @@ def video_viewer():
                 </div>
             </div>
             
+            <div class="help-section">
+                <h3>📊 ESP32 Connection History</h3>
+                <div id="connectionHistory" style="font-size: 13px;">
+                    <p style="color: #999;">Loading connection history...</p>
+                </div>
+            </div>
+            
             <div class="help-section" style="background: #2d5016;">
                 <h3>🎮 Video Frame Rate Control</h3>
                 
@@ -1442,6 +1449,54 @@ def video_viewer():
                         }}
                     }})
                     .catch(err => console.log('Uptime fetch error:', err));
+                
+                // Fetch connection history [jwc 25-1215-1700]
+                fetch('/connection_history')
+                    .then(response => response.json())
+                    .then(data => {{
+                        let historyHTML = '';
+                        
+                        if (data.sessions && data.sessions.length > 0) {{
+                            historyHTML += '<div style="margin-bottom: 10px; color: #bdc3c7;">';
+                            historyHTML += '<strong>Total Sessions:</strong> ' + data.total_sessions;
+                            historyHTML += ' | <strong>Server Started:</strong> ' + data.server_start_time;
+                            historyHTML += '</div>';
+                            
+                            historyHTML += '<table style="width: 100%; border-collapse: collapse; font-size: 12px;">';
+                            historyHTML += '<tr style="background: #1a1a1a; border-bottom: 2px solid #4CAF50;">';
+                            historyHTML += '<th style="padding: 8px; text-align: left; color: #4CAF50;">Status</th>';
+                            historyHTML += '<th style="padding: 8px; text-align: left; color: #4CAF50;">Connected</th>';
+                            historyHTML += '<th style="padding: 8px; text-align: left; color: #4CAF50;">Disconnected</th>';
+                            historyHTML += '<th style="padding: 8px; text-align: left; color: #4CAF50;">Duration</th>';
+                            historyHTML += '</tr>';
+                            
+                            // Reverse to show newest first
+                            for (let i = data.sessions.length - 1; i >= 0; i--) {{
+                                const session = data.sessions[i];
+                                const isConnected = session.status === 'connected';
+                                const statusColor = isConnected ? '#27ae60' : '#95a5a6';
+                                const statusIcon = isConnected ? '🟢' : '⚪';
+                                
+                                historyHTML += '<tr style="border-bottom: 1px solid #444;">';
+                                historyHTML += '<td style="padding: 8px; color: ' + statusColor + ';">' + statusIcon + ' ' + session.status + '</td>';
+                                historyHTML += '<td style="padding: 8px; color: #bdc3c7;">' + session.connect_time + '</td>';
+                                historyHTML += '<td style="padding: 8px; color: #bdc3c7;">' + session.disconnect_time + '</td>';
+                                historyHTML += '<td style="padding: 8px; color: #bdc3c7;">' + session.duration_formatted + '</td>';
+                                historyHTML += '</tr>';
+                            }}
+                            
+                            historyHTML += '</table>';
+                        }} else {{
+                            historyHTML = '<p style="color: #999;">No connection history available</p>';
+                        }}
+                        
+                        document.getElementById('connectionHistory').innerHTML = historyHTML;
+                    }})
+                    .catch(err => {{
+                        console.log('Connection history fetch error:', err);
+                        document.getElementById('connectionHistory').innerHTML = 
+                            '<p style="color: #e74c3c;">Failed to load connection history</p>';
+                    }});
             }}
             
             // Update stats immediately and then every second
