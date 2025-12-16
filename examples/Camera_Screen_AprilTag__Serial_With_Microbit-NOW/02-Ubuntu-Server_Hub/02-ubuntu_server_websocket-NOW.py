@@ -1121,6 +1121,48 @@ def video_viewer():
             </div>
             
             <div class="help-section">
+                <h3>📊 ESP32 Connection History</h3>
+                <div id="connectionHistory" style="font-size: 13px;">
+                    <p style="color: #999;">Loading connection history...</p>
+                </div>
+            </div>
+            
+            
+            <div class="help-section" style="background: #2d5016;">
+                <h3>🎮 Video Frame Rate Control</h3>
+                
+                <div style="margin-bottom: 15px; padding: 10px; background: #1a1a1a; border-radius: 5px;">
+                    <strong>Current Interval:</strong> <span id="currentInterval" style="color: #4CAF50;">1000ms</span>
+                    <span id="currentFpsControl" style="color: #999;">(1.0 FPS)</span>
+                </div>
+                
+                <div style="margin-bottom: 10px;">
+                    <button onclick="adjustInterval(-500)" style="margin: 5px; padding: 8px 15px; background: #27ae60; border: none; color: white; border-radius: 5px; cursor: pointer;">⬆️ Faster (-500ms)</button>
+                    <button onclick="adjustInterval(-100)" style="margin: 5px; padding: 8px 15px; background: #27ae60; border: none; color: white; border-radius: 5px; cursor: pointer;">⬆️ Faster (-100ms)</button>
+                    <button onclick="adjustInterval(100)" style="margin: 5px; padding: 8px 15px; background: #e67e22; border: none; color: white; border-radius: 5px; cursor: pointer;">⬇️ Slower (+100ms)</button>
+                    <button onclick="adjustInterval(500)" style="margin: 5px; padding: 8px 15px; background: #e67e22; border: none; color: white; border-radius: 5px; cursor: pointer;">⬇️ Slower (+500ms)</button>
+                </div>
+                
+                <div style="margin-bottom: 10px;">
+                    <strong style="display: block; margin-bottom: 5px;">Quick Presets:</strong>
+                    <button onclick="setIntervalValue(500)" style="margin: 5px; padding: 8px 15px; background: #3498db; border: none; color: white; border-radius: 5px; cursor: pointer;">0.5s (2.0 FPS)</button>
+                    <button onclick="setIntervalValue(1000)" style="margin: 5px; padding: 8px 15px; background: #3498db; border: none; color: white; border-radius: 5px; cursor: pointer;">1.0s (1.0 FPS)</button>
+                    <button onclick="setIntervalValue(2000)" style="margin: 5px; padding: 8px 15px; background: #3498db; border: none; color: white; border-radius: 5px; cursor: pointer;">2.0s (0.5 FPS)</button>
+                    <button onclick="setIntervalValue(5000)" style="margin: 5px; padding: 8px 15px; background: #3498db; border: none; color: white; border-radius: 5px; cursor: pointer;">5.0s (0.2 FPS)</button>
+                </div>
+                
+                <div style="margin-top: 15px;">
+                    <strong style="display: block; margin-bottom: 5px;">Custom Interval (100-10000ms):</strong>
+                    <input type="range" id="intervalSlider" min="100" max="10000" value="1000" step="100" style="width: 70%; vertical-align: middle;">
+                    <button onclick="setIntervalFromSlider()" style="margin-left: 10px; padding: 8px 15px; background: #9b59b6; border: none; color: white; border-radius: 5px; cursor: pointer;">Apply</button>
+                </div>
+                
+                <div style="margin-top: 10px; padding: 8px; background: #1a1a1a; border-radius: 5px; font-size: 12px; color: #bdc3c7;">
+                    💡 <strong>Note:</strong> Changes are sent to ESP32 in real-time via WebSocket. Interval resets when ESP32 reboots.
+                </div>
+            </div>
+            
+            <div class="help-section">
                 <h3>📖 Performance Metrics Explained</h3>
                 
                 <div class="metric">
@@ -1187,47 +1229,6 @@ def video_viewer():
                         2. Upgrade server hardware<br>
                         3. Check network speed (rare issue)
                     </div>
-                </div>
-            </div>
-            
-            <div class="help-section">
-                <h3>📊 ESP32 Connection History</h3>
-                <div id="connectionHistory" style="font-size: 13px;">
-                    <p style="color: #999;">Loading connection history...</p>
-                </div>
-            </div>
-            
-            <div class="help-section" style="background: #2d5016;">
-                <h3>🎮 Video Frame Rate Control</h3>
-                
-                <div style="margin-bottom: 15px; padding: 10px; background: #1a1a1a; border-radius: 5px;">
-                    <strong>Current Interval:</strong> <span id="currentInterval" style="color: #4CAF50;">1000ms</span>
-                    <span id="currentFpsControl" style="color: #999;">(1.0 FPS)</span>
-                </div>
-                
-                <div style="margin-bottom: 10px;">
-                    <button onclick="adjustInterval(-500)" style="margin: 5px; padding: 8px 15px; background: #27ae60; border: none; color: white; border-radius: 5px; cursor: pointer;">⬆️ Faster (-500ms)</button>
-                    <button onclick="adjustInterval(-100)" style="margin: 5px; padding: 8px 15px; background: #27ae60; border: none; color: white; border-radius: 5px; cursor: pointer;">⬆️ Faster (-100ms)</button>
-                    <button onclick="adjustInterval(100)" style="margin: 5px; padding: 8px 15px; background: #e67e22; border: none; color: white; border-radius: 5px; cursor: pointer;">⬇️ Slower (+100ms)</button>
-                    <button onclick="adjustInterval(500)" style="margin: 5px; padding: 8px 15px; background: #e67e22; border: none; color: white; border-radius: 5px; cursor: pointer;">⬇️ Slower (+500ms)</button>
-                </div>
-                
-                <div style="margin-bottom: 10px;">
-                    <strong style="display: block; margin-bottom: 5px;">Quick Presets:</strong>
-                    <button onclick="setIntervalValue(500)" style="margin: 5px; padding: 8px 15px; background: #3498db; border: none; color: white; border-radius: 5px; cursor: pointer;">0.5s (2.0 FPS)</button>
-                    <button onclick="setIntervalValue(1000)" style="margin: 5px; padding: 8px 15px; background: #3498db; border: none; color: white; border-radius: 5px; cursor: pointer;">1.0s (1.0 FPS)</button>
-                    <button onclick="setIntervalValue(2000)" style="margin: 5px; padding: 8px 15px; background: #3498db; border: none; color: white; border-radius: 5px; cursor: pointer;">2.0s (0.5 FPS)</button>
-                    <button onclick="setIntervalValue(5000)" style="margin: 5px; padding: 8px 15px; background: #3498db; border: none; color: white; border-radius: 5px; cursor: pointer;">5.0s (0.2 FPS)</button>
-                </div>
-                
-                <div style="margin-top: 15px;">
-                    <strong style="display: block; margin-bottom: 5px;">Custom Interval (100-10000ms):</strong>
-                    <input type="range" id="intervalSlider" min="100" max="10000" value="1000" step="100" style="width: 70%; vertical-align: middle;">
-                    <button onclick="setIntervalFromSlider()" style="margin-left: 10px; padding: 8px 15px; background: #9b59b6; border: none; color: white; border-radius: 5px; cursor: pointer;">Apply</button>
-                </div>
-                
-                <div style="margin-top: 10px; padding: 8px; background: #1a1a1a; border-radius: 5px; font-size: 12px; color: #bdc3c7;">
-                    💡 <strong>Note:</strong> Changes are sent to ESP32 in real-time via WebSocket. Interval resets when ESP32 reboots.
                 </div>
             </div>
         </div>
