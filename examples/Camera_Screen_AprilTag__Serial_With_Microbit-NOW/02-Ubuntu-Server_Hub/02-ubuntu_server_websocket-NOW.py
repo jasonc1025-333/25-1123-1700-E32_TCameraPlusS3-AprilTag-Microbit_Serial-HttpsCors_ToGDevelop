@@ -38,7 +38,7 @@ SERVER_PORT = 5000
 SERVER_HOST = '0.0.0.0'
 
 # ============================================================================
-# VIDEO PERFORMANCE MONITORING CONFIGURATION (jwc 25-1209-1600)
+# VIDEO PERFORMANCE MONITORING CONFIGURATION [jwc 25-1209-1600]
 # ============================================================================
 # These constants are OPTIONAL overrides for performance monitoring.
 # If set to None, the system auto-detects target FPS from actual traffic.
@@ -123,13 +123,13 @@ latest_apriltag_data = None
 latest_video_frame = None  # Will store (jpeg_bytes, timestamp)
 latest_video_frame_lock = threading.Lock()  # Thread-safe access to video frame
 
-# Video FPS tracking (jwc 25-1206-1430)
+# Video FPS tracking [jwc 25-1206-1430]
 video_frame_timestamps = []  # Last 10 frame timestamps for FPS calculation
 MAX_FPS_SAMPLES = 10
 calculated_fps = 0.0
 video_fps_lock = threading.Lock()  # Thread-safe FPS calculation
 
-# Video frame dimensions tracking (jwc 25-1207-0130)
+# Video frame dimensions tracking [jwc 25-1207-0130]
 actual_frame_width = 0
 actual_frame_height = 0
 frame_dimensions_lock = threading.Lock()
@@ -195,7 +195,7 @@ class VideoPerformanceMetrics:
             variance = sum((x - mean_interval) ** 2 for x in self.frame_intervals) / len(self.frame_intervals)
             jitter = variance ** 0.5
             
-            # FPS calculations with dynamic target detection (jwc 25-1209-1600)
+            # FPS calculations with dynamic target detection [jwc 25-1209-1600]
             avg_fps = 1.0 / avg_interval if avg_interval > 0 else 0
             
             # Determine target FPS: auto-detect (median) or manual override
@@ -303,8 +303,22 @@ stats = {
     'gdevelop_clients': 0
 }
 
+# ESP32 connection history (jwc 25-1215-1700 - Track all connection sessions)
+esp32_connection_history = []  # List of {connect_time, disconnect_time, duration_seconds} dicts
+
+# Thread-safe lock for esp32_connection_history [jwc 25-1215-1700]
+# WHY NEEDED: Flask runs multiple threads simultaneously:
+#   - WebSocket threads write connection/disconnection events to history
+#   - HTTP endpoint threads read history when users request /connection_history
+#   - Multiple ESP32 devices could connect/disconnect concurrently
+# WITHOUT LOCK: Race conditions cause data corruption (e.g., reading list while it's being modified)
+# WITH LOCK: Only one thread can access esp32_connection_history at a time, ensuring data consistency
+esp32_history_lock = threading.Lock()
+
+MAX_CONNECTION_HISTORY = 20  # Keep last 20 connection sessions
+
 # ============================================================================
-# NETWORK LAG MONITORING (jwc 25-1207-2110)
+# NETWORK LAG MONITORING [jwc 25-1207-2110]
 # ============================================================================
 # Tracks timing between AprilTag (WebSocket) and Video (HTTP) to ensure
 # no interference/conflict. WebSocket needs 3s breathing room for stability.
@@ -485,6 +499,17 @@ def handle_esp32_message(ws, message):
                     websocket_clients['esp32'].append(ws)
                     stats['esp32_connected'] = True
                     stats['esp32_connect_time'] = time.time()  # Track connection time
+                    
+                    # Record connection start in history [jwc 25-1215-1700]
+                    with esp32_history_lock:
+                        esp32_connection_history.append({
+                            'connect_time': stats['esp32_connect_time'],
+                            'disconnect_time': None,  # Still connected
+                            'duration_seconds': None  # Will be calculated on disconnect
+                        })
+                        # Keep only last MAX_CONNECTION_HISTORY sessions
+                        if len(esp32_connection_history) > MAX_CONNECTION_HISTORY:
+                            esp32_connection_history.pop(0)
             
             esp32_name = data.get('data', {}).get('camera_name', 'ESP32-Unknown')
             
@@ -534,7 +559,7 @@ def handle_esp32_message(ws, message):
             
             stats['apriltag_events'] += 1
             
-            # Record AprilTag timing (jwc 25-1207-2110)
+            # Record AprilTag timing [jwc 25-1207-2110]
             timing_monitor.record_apriltag()
             
             print(f"🟢-->> RECV ESP32: apriltag_data | 📡 ID={payload.get('tag_id')}, Pos=({payload.get('x_cm', 0):.1f},{payload.get('y_cm', 0):.1f},{payload.get('z_cm', 0):.1f})cm <<-- GDevelop({stats['gdevelop_clients']}) | JSON={json.dumps(broadcast_message)[:150]}...")
@@ -650,7 +675,7 @@ def websocket(ws):
                 break
             
             # ============================================================================
-            # BINARY MESSAGE HANDLING (jwc 25-1209-1040)
+            # BINARY MESSAGE HANDLING [jwc 25-1209-1040]
             # ============================================================================
             # Check if message is binary (video frame) vs text (JSON)
             if isinstance(message, bytes):
@@ -699,7 +724,7 @@ def websocket(ws):
                         # Record video timing
                         timing_monitor.record_video()
                         
-                        # Record performance metrics (jwc 25-1209-1310)
+                        # Record performance metrics [jwc 25-1209-1310]
                         processing_time_ms = (time.time() - current_time) * 1000
                         video_perf.record_frame(len(jpeg_data), processing_time_ms)
                         
@@ -788,7 +813,18 @@ def websocket(ws):
                     websocket_clients[client_list_type].remove(ws)
                     disconnected_type = client_list_type
                     if client_list_type == 'esp32':
+                        disconnect_time = time.time()
                         stats['esp32_connected'] = False
+                        
+                        # Record disconnect in history [jwc 25-1215-1700]
+                        if stats['esp32_connect_time'] > 0:
+                            with esp32_history_lock:
+                                # Update the most recent connection session
+                                if esp32_connection_history and esp32_connection_history[-1]['disconnect_time'] is None:
+                                    esp32_connection_history[-1]['disconnect_time'] = disconnect_time
+                                    esp32_connection_history[-1]['duration_seconds'] = int(disconnect_time - esp32_connection_history[-1]['connect_time'])
+                        
+                        stats['esp32_connect_time'] = 0  # Reset (fixes "not connected" bug)
                     elif client_list_type == 'gdevelop':
                         stats['gdevelop_clients'] = len(websocket_clients['gdevelop'])
         
@@ -838,7 +874,7 @@ def receive_video_frame():
         if jpeg_data and len(jpeg_data) > 0:
             current_time = time.time()
             
-            # Extract frame dimensions from JPEG header (jwc 25-1207-0130)
+            # Extract frame dimensions from JPEG header [jwc 25-1207-0130]
             # JPEG SOF0 marker format: FF C0 [length] [precision] [height:2bytes] [width:2bytes]
             try:
                 # Find SOF0 marker (0xFFC0)
@@ -859,7 +895,7 @@ def receive_video_frame():
             with latest_video_frame_lock:
                 latest_video_frame = (jpeg_data, current_time)
             
-            # Calculate FPS from timestamps (jwc 25-1206-1430)
+            # Calculate FPS from timestamps [jwc 25-1206-1430]
             with video_fps_lock:
                 video_frame_timestamps.append(current_time)
                 if len(video_frame_timestamps) > MAX_FPS_SAMPLES:
@@ -1393,7 +1429,7 @@ def video_viewer():
                     }})
                     .catch(err => console.log('Performance stats fetch error:', err));
                 
-                // Fetch connection uptime (jwc 25-1215-1100)
+                // Fetch connection uptime [jwc 25-1215-1100]
                 fetch('/connection_uptime')
                     .then(response => response.json())
                     .then(data => {{
@@ -1541,8 +1577,8 @@ def status():
 
 @app.route('/video_fps')
 def video_fps():
-    """JSON endpoint for video FPS data (jwc 25-1206-1430) and dimensions (jwc 25-1207-0130)
-    Updated (jwc 25-1209-1700): Now uses dynamic target FPS from performance metrics (auto-detected)"""
+    """JSON endpoint for video FPS data [jwc 25-1206-1430] and dimensions [jwc 25-1207-0130]
+    Updated [jwc 25-1209-1700]: Now uses dynamic target FPS from performance metrics (auto-detected)"""
     with video_fps_lock:
         current_fps = calculated_fps
     
@@ -1571,7 +1607,7 @@ def video_fps():
 
 @app.route('/video_stats')
 def video_stats():
-    """JSON endpoint for comprehensive video performance statistics (jwc 25-1209-1310)"""
+    """JSON endpoint for comprehensive video performance statistics [jwc 25-1209-1310]"""
     perf_stats = video_perf.get_stats()
     
     # Add basic FPS and dimensions data
@@ -1587,7 +1623,7 @@ def video_stats():
 
 @app.route('/connection_uptime')
 def connection_uptime():
-    """JSON endpoint for ESP32 connection uptime (jwc 25-1215-1100)"""
+    """JSON endpoint for ESP32 connection uptime [jwc 25-1215-1100]"""
     if stats['esp32_connected'] and stats['esp32_connect_time'] > 0:
         uptime_seconds = int(time.time() - stats['esp32_connect_time'])
         
@@ -1625,9 +1661,45 @@ def connection_uptime():
             'seconds': 0
         })
 
+@app.route('/connection_history')
+def connection_history():
+    """JSON endpoint for ESP32 connection history [jwc 25-1215-1700]"""
+    with esp32_history_lock:
+        history = []
+        for session in esp32_connection_history:
+            connect_dt = datetime.fromtimestamp(session['connect_time'])
+            entry = {
+                'connect_time': connect_dt.strftime('%Y-%m-%d %H:%M:%S'),
+                'connect_timestamp': session['connect_time']
+            }
+            
+            if session['disconnect_time'] is not None:
+                disconnect_dt = datetime.fromtimestamp(session['disconnect_time'])
+                entry['disconnect_time'] = disconnect_dt.strftime('%Y-%m-%d %H:%M:%S')
+                entry['disconnect_timestamp'] = session['disconnect_time']
+                entry['duration_seconds'] = session['duration_seconds']
+                entry['duration_formatted'] = f"{session['duration_seconds'] // 60}m {session['duration_seconds'] % 60}s"
+                entry['status'] = 'disconnected'
+            else:
+                # Currently connected
+                current_duration = int(time.time() - session['connect_time'])
+                entry['disconnect_time'] = 'Still connected'
+                entry['disconnect_timestamp'] = None
+                entry['duration_seconds'] = current_duration
+                entry['duration_formatted'] = f"{current_duration // 60}m {current_duration % 60}s"
+                entry['status'] = 'connected'
+            
+            history.append(entry)
+    
+    return jsonify({
+        'sessions': history,
+        'total_sessions': len(history),
+        'server_start_time': datetime.fromtimestamp(stats['start_time']).strftime('%Y-%m-%d %H:%M:%S')
+    })
+
 @app.route('/set_video_interval', methods=['POST'])
 def set_video_interval():
-    """Set ESP32 video frame send interval in real-time (jwc 25-1210-0700)"""
+    """Set ESP32 video frame send interval in real-time [jwc 25-1210-0700]"""
     data = request.get_json()
     interval_ms = data.get('interval_ms', 1000)
     

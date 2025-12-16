@@ -1,5 +1,5 @@
 //// ============================================================================
-//// CRITICAL FIX - HTTP TIMEOUT & WEBSOCKET STABILITY (jwc 25-1207-2000)
+//// CRITICAL FIX - HTTP TIMEOUT & WEBSOCKET STABILITY [jwc 25-1207-2000]
 //// ============================================================================
 //// 
 //// __1 second timeout means:__
@@ -206,8 +206,8 @@
 // ⚙️  FEATURE ENABLE/DISABLE FLAGS
 // ============================================================================
 
-// 📹 VIDEO STREAMING CONTROL (jwc 25-1207-1710)
-// 
+// 📹 VIDEO STREAMING CONTROL [jwc 25-1207-1710]
+//
 // Set to 'true' to enable HTTP video frame uploads (for human viewing via browser)
 // Set to 'false' to disable video streaming (AprilTag data only via WebSocket)
 //
@@ -226,7 +226,7 @@
 const bool Video_Frames_SENDING_BOOL = true;  // ❌ DISABLED (default) - HTTP timeouts persist
 
 // ============================================================================
-// 🎯 VIDEO PROTOCOL SELECTION - HTTP vs WebSocket (jwc 25-1209-0420)
+// 🎯 VIDEO PROTOCOL SELECTION - HTTP vs WebSocket [jwc 25-1209-0420]
 // ============================================================================
 // Choose video streaming protocol:
 //   false = HTTP POST (legacy - has timeout issues)
@@ -336,7 +336,7 @@ unsigned long VideoFrame_Send_INTERVAL_MS = 2000;  // 2.0s = 0.5 FPS ✅ DEFAULT
 // ⚠️  DO NOT USE:
 //   500ms = 2.0 FPS ❌ Causes WebSocket disconnections & timeout errors
 //
-// KNOWN ISSUES (jwc 25-1207-1615):
+// KNOWN ISSUES [jwc 25-1207-1615]:
 //   - Fast video uploads cause HTTP timeout errors (Code=-11)
 //   - HTTP uploads can block WebSocket handshake
 //   - Results in "Connection closed: 1005" errors
@@ -1519,7 +1519,13 @@ void setup()
         // Connect to WebSocket server
         webSocket.begin(WS_HOST, WS_PORT, WS_PATH);
         
-        // Optional settings
+        // [jwc 25-1215-1730] AUTOMATIC RECONNECTION CONFIGURATION
+        // - webSocket.setReconnectInterval(5000) - Tells library to retry every 5 seconds
+        // - webSocket.loop() - Called every loop iteration, handles:
+        //   - Connection attempts if disconnected
+        //   - Ping/pong heartbeat
+        //   - Message sending/receiving
+        //   - All WebSocket events
         webSocket.setReconnectInterval(5000);  // Retry every 5 seconds if disconnected
         webSocket.enableHeartbeat(15000, 3000, 2);  // Ping every 15s, timeout 3s, disconnect after 2 missed pongs
         
@@ -2077,7 +2083,7 @@ void loop()
     // Decide whether to send video based on lag and flag
     bool should_send_video = false;
     
-    // ⚠️ CHECK VIDEO STREAMING FLAG (jwc 25-1207-1710)
+    // ⚠️ CHECK VIDEO STREAMING FLAG [jwc 25-1207-1710]
     // Only attempt video streaming if enabled via Video_Frames_SENDING_BOOL flag
     // Video starts as soon as WebSocket connection is established (no AprilTag requirement)
     if (Video_Frames_SENDING_BOOL && 
