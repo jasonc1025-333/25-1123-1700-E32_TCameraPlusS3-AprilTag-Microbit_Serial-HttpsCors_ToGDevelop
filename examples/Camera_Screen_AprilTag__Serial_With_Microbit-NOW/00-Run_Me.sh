@@ -84,6 +84,49 @@ NC='\033[0m' # No Color
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 
+# Array to track all launched terminal PIDs for cleanup [jwc 25-1216-0110]
+TERMINAL_PIDS=()
+
+# Cleanup function to kill all terminal processes on exit [jwc 25-1216-0110]
+cleanup() {
+    echo ""
+    echo -e "${YELLOW}🛑 Ctrl-C detected - Shutting down all processes...${NC}"
+    echo ""
+    
+    # Kill by exact process patterns (most reliable method)
+    echo "  [1/4] Stopping PlatformIO/ESP32 processes..."
+    pkill -9 -f "pio run" 2>/dev/null
+    pkill -9 -f "pio device monitor" 2>/dev/null  
+    pkill -9 -f "platformio" 2>/dev/null
+    
+    echo "  [2/4] Stopping Python servers..."
+    pkill -9 -f "02-ubuntu_server_websocket-NOW.py" 2>/dev/null
+    pkill -9 -f "python3 -m http.server 5100" 2>/dev/null
+    pkill -9 -f "http.server 5100" 2>/dev/null
+    
+    echo "  [3/4] Stopping launcher scripts..."
+    pkill -9 -f ".launch_esp32.sh" 2>/dev/null
+    pkill -9 -f ".launch_server.sh" 2>/dev/null
+    pkill -9 -f ".launch_gdevelop.sh" 2>/dev/null
+    
+    echo "  [4/4] Closing terminal windows..."
+    # Close the gnome-terminal windows we launched
+    for pid in "${TERMINAL_PIDS[@]}"; do
+        if ps -p $pid > /dev/null 2>&1; then
+            kill -9 $pid 2>/dev/null
+        fi
+    done
+    
+    echo ""
+    echo -e "${GREEN}✅ All processes stopped and terminals closed${NC}"
+    echo -e "${GREEN}✅ System shutdown complete${NC}"
+    echo ""
+    exit 0
+}
+
+# Register cleanup function for SIGINT (Ctrl-C) [jwc 25-1216-0110]
+trap cleanup INT
+
 echo -e "${BLUE}╔══════════════════════════════════════════════════════════════╗${NC}"
 echo -e "${BLUE}║      ESP32 Smart Camera System - Auto Startup Script        ║${NC}"
 echo -e "${BLUE}╚══════════════════════════════════════════════════════════════╝${NC}"
@@ -448,6 +491,9 @@ env -i HOME="$HOME" USER="$USER" PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:
                    --geometry=80x25+0+0 \
                    -- bash -c "$ESP32_LAUNCHER" &
 
+# Track terminal PID for cleanup [jwc 25-1216-0110]
+TERMINAL_PIDS+=($!)
+
 echo -e "${GREEN}✓ ESP32 flash started in separate terminal${NC}"
 echo ""
 echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
@@ -509,6 +555,9 @@ env -i HOME="$HOME" USER="$USER" PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:
                    --geometry=100x50+960+0 \
                    -- bash -c "$SERVER_LAUNCHER" &
 
+# Track terminal PID for cleanup [jwc 25-1216-0110]
+TERMINAL_PIDS+=($!)
+
 echo -e "${GREEN}✓ Ubuntu Server launched (AFTER ESP32 flash)${NC}"
 echo ""
 
@@ -564,6 +613,9 @@ EOF
                        --geometry=80x25+0+540 \
                        -- bash -c "$GDEVELOP_LAUNCHER" &
 
+    # Track terminal PID for cleanup [jwc 25-1216-0110]
+    TERMINAL_PIDS+=($!)
+
     echo -e "${GREEN}✓ GDevelop Game Server launched in separate terminal${NC}"
     echo -e "${GREEN}  Access game at: http://localhost:5100${NC}"
     echo ""
@@ -603,14 +655,12 @@ echo "- Safe to copy project to another Ubuntu 22 machine"
 echo "- Script will auto-recreate venvs on new machine"
 echo ""
 echo -e "${BLUE}Script complete! Terminals will keep running.${NC}"
-echo -e "${BLUE}Press Ctrl+C to exit this window.${NC}"
+echo -e "${BLUE}Press Ctrl+C to exit and close all terminals.${NC}"
 echo ""
 
 # Keep script running so user can see the summary
-# They can Ctrl+C when ready
-trap 'echo ""; echo "Script exited. Terminals are still running."; exit 0' INT
-
-# Wait indefinitely (user exits with Ctrl+C)
+# Cleanup function is already registered via trap at top of script
+# Wait indefinitely (user exits with Ctrl+C which triggers cleanup)
 while true; do
     sleep 1
 done

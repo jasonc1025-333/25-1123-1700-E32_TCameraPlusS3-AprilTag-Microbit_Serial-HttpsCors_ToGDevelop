@@ -110,13 +110,35 @@ class TagData:
 # GLOBAL STATE
 # ============================================================================
 
-# WebSocket connections (thread-safe)
+# ============================================================================
+# WEBSOCKET CLIENT TRACKING [jwc 25-1217-0550]
+# ============================================================================
+# websocket_clients: Dictionary storing all active WebSocket connections
+# - Structure: {'esp32': [ws1, ws2, ...], 'gdevelop': [ws1, ws2, ...], 'viewers': [...]}
+# - Each list contains WebSocket connection objects
+# - Updated when clients connect/disconnect
+#
+# websocket_lock: Thread synchronization lock (CRITICAL FOR THREAD SAFETY)
+# WHY NEEDED:
+#   Flask runs each HTTP request and WebSocket connection in separate threads
+#   Multiple threads can try to modify websocket_clients simultaneously:
+#   - Thread A: ESP32 connecting, adding to list
+#   - Thread B: GDevelop disconnecting, removing from list  
+#   - Thread C: Broadcasting message, iterating through list
+#   Without lock: Race conditions → corrupted lists, crashes
+#   With lock: Only one thread accesses websocket_clients at a time
+#
+# USAGE PATTERN:
+#   with websocket_lock:
+#       # Safe to read/modify websocket_clients here
+#       websocket_clients['esp32'].append(ws)
+#
 websocket_clients = {
-    'esp32': [],
-    'gdevelop': [],
-    'viewers': []
+    'esp32': [],       # ESP32 camera clients
+    'gdevelop': [],    # GDevelop game clients
+    'viewers': []      # Other viewer clients
 }
-websocket_lock = threading.Lock()
+websocket_lock = threading.Lock()  # MUST acquire before accessing websocket_clients
 
 # Latest data
 latest_apriltag_data = None
@@ -824,7 +846,9 @@ def websocket(ws):
                                     esp32_connection_history[-1]['disconnect_time'] = disconnect_time
                                     esp32_connection_history[-1]['duration_seconds'] = int(disconnect_time - esp32_connection_history[-1]['connect_time'])
                         
-                        stats['esp32_connect_time'] = 0  # Reset (fixes "not connected" bug)
+                        # DON'T reset esp32_connect_time! [jwc 25-1216-1540]
+                        # Keeping the last connect time allows uptime endpoint to show
+                        # how long ago the ESP32 was connected (useful for debugging)
                     elif client_list_type == 'gdevelop':
                         stats['gdevelop_clients'] = len(websocket_clients['gdevelop'])
         
@@ -1060,7 +1084,7 @@ def video_viewer():
             <h1>📹 ESP32 Camera Live View</h1>
             <div class="info">
                 <span class="status"></span>
-                <span id="refreshInfo">Web-updates: Video (dynamic) | Stats 1s</span>
+                <span id="refreshInfo">Web-updates: Loading... | Stats 1s</span>
             </div>
             
             <div class="video-container">
@@ -1243,6 +1267,12 @@ def video_viewer():
                     if (data.interval_ms > 0) {{
                         currentIntervalMs = data.interval_ms;
                         updateIntervalDisplay();
+                        
+                        // Also update the refresh info display immediately [jwc 25-1217-0615]
+                        const refreshRate = (currentIntervalMs * 0.9 / 1000).toFixed(1);
+                        document.getElementById('refreshInfo').textContent = 
+                            'Web-updates: Video ' + refreshRate + 's (auto) | Stats 1s';
+                        
                         console.log('✅ Loaded actual ESP32 interval:', currentIntervalMs, 'ms');
                     }}
                 }})
@@ -1714,8 +1744,21 @@ def video_stats():
 
 @app.route('/connection_uptime')
 def connection_uptime():
-    """JSON endpoint for ESP32 connection uptime [jwc 25-1215-1100]"""
-    if stats['esp32_connected'] and stats['esp32_connect_time'] > 0:
+    # JSON endpoint for ESP32 connection uptime [jwc 25-1215-1100]
+    # Updated [jwc 25-1217-0610]: Check actual connection list instead of flag
+    #
+    # WHY: The stats['esp32_connected'] flag can get out of sync with reality
+    # - If ESP32 briefly disconnects and reconnects, flag may be stale
+    # - Checking the actual websocket_clients list is more reliable
+    # - This fixes issue where uptime shows "Not connected" when video is still working
+    #
+    # THREAD SAFETY: We acquire websocket_lock to safely read the connection list
+    
+    # Check if there are any active ESP32 connections (more reliable than flag)
+    with websocket_lock:  # LOCK: Safely read websocket_clients['esp32']
+        connection_with_eps32_bool = len(websocket_clients['esp32']) > 0
+    
+    if connection_with_eps32_bool and stats['esp32_connect_time'] > 0:
         uptime_seconds = int(time.time() - stats['esp32_connect_time'])
         
         # Convert to days, hours, minutes
@@ -1754,33 +1797,29 @@ def connection_uptime():
 
 @app.route('/connection_history')
 def connection_history():
-    """JSON endpoint for ESP32 connection history [jwc 25-1215-1700]"""
+    """JSON endpoint for ESP32 connection history [jwc 25-1215-1700]
+    IMPORTANT: Only returns PAST sessions (disconnected). Current connection shown in /connection_uptime"""
     with esp32_history_lock:
         history = []
         for session in esp32_connection_history:
-            connect_dt = datetime.fromtimestamp(session['connect_time'])
-            entry = {
-                'connect_time': connect_dt.strftime('%Y-%m-%d %H:%M:%S'),
-                'connect_timestamp': session['connect_time']
-            }
-            
+            # ONLY include disconnected sessions in history [jwc 25-1216-1530]
             if session['disconnect_time'] is not None:
+                connect_dt = datetime.fromtimestamp(session['connect_time'])
                 disconnect_dt = datetime.fromtimestamp(session['disconnect_time'])
-                entry['disconnect_time'] = disconnect_dt.strftime('%Y-%m-%d %H:%M:%S')
-                entry['disconnect_timestamp'] = session['disconnect_time']
-                entry['duration_seconds'] = session['duration_seconds']
-                entry['duration_formatted'] = f"{session['duration_seconds'] // 60}m {session['duration_seconds'] % 60}s"
-                entry['status'] = 'disconnected'
-            else:
-                # Currently connected
-                current_duration = int(time.time() - session['connect_time'])
-                entry['disconnect_time'] = 'Still connected'
-                entry['disconnect_timestamp'] = None
-                entry['duration_seconds'] = current_duration
-                entry['duration_formatted'] = f"{current_duration // 60}m {current_duration % 60}s"
-                entry['status'] = 'connected'
-            
-            history.append(entry)
+                
+                # Calculate duration from stored timestamps (frozen at disconnect time)
+                duration_sec = int(session['disconnect_time'] - session['connect_time'])
+                
+                entry = {
+                    'connect_time': connect_dt.strftime('%Y-%m-%d %H:%M:%S'),
+                    'connect_timestamp': session['connect_time'],
+                    'disconnect_time': disconnect_dt.strftime('%Y-%m-%d %H:%M:%S'),
+                    'disconnect_timestamp': session['disconnect_time'],
+                    'duration_seconds': duration_sec,
+                    'duration_formatted': f"{duration_sec // 60}m {duration_sec % 60}s",
+                    'status': 'disconnected'
+                }
+                history.append(entry)
     
     return jsonify({
         'sessions': history,
