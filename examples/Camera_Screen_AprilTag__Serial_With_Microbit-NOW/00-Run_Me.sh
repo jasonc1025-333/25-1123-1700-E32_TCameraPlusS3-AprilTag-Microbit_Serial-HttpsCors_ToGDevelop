@@ -514,22 +514,76 @@ TERMINAL_PIDS+=($!)
 
 echo -e "${GREEN}✓ ESP32 flash started in separate terminal${NC}"
 echo ""
-echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
-echo -e "${YELLOW}⚠️  IMPORTANT: DO NOT START SERVER YET!${NC}"
-echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
-echo ""
-echo -e "${YELLOW}Please check the ESP32 serial monitor terminal and verify:${NC}"
-echo ""
-echo "  1. ✅ ESP32 upload completed successfully"
-echo "  2. ✅ ESP32 connected to WiFi"
-echo "  3. ✅ Serial monitor shows: 'Waiting for server...' or similar message"
-echo ""
-echo -e "${YELLOW}Only when you see the ESP32 is ready and waiting, press Enter to start the server.${NC}"
-echo ""
-read -p "Press Enter when ESP32 serial monitor confirms it's waiting for server... "
 
+# ============================================================================
+# AUTO-START SERVER AFTER FIXED DELAY [jwc 25-1217-0800]
+# ============================================================================
+# WHY FIXED DELAY:
+#   - ESP32 needs time to boot and connect to WiFi
+#   - Typical sequence: Upload (30-60s) → Boot (3-5s) → WiFi (5-10s) → Ready
+#   - 20 second delay after upload gives ESP32 enough time to be ready
+#   - Simpler than parsing serial output or network detection
+#
+# COUNTDOWN BENEFITS:
+#   - Visual feedback of progress
+#   - Allows user to verify ESP32 status in serial monitor
+#   - Easy debugging if timing needs adjustment
+#
+# TROUBLESHOOTING:
+#   - If "Connection refused": ESP32 not ready yet, increase delay (20-25s)
+#   - If ESP32 shows "Waiting for server" too early: Decrease delay (10-12s)
+#   - Check ESP32 serial monitor to see actual timing
+#
+# MANUAL OVERRIDE:
+#   - Press Ctrl+C during countdown to stop and restart manually
+# ============================================================================
+
+echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
+echo -e "${YELLOW}⏰  AUTOMATIC SERVER STARTUP IN PROGRESS${NC}"
+echo -e "${YELLOW}═══════════════════════════════════════════════════════════════${NC}"
 echo ""
-echo -e "${GREEN}✓ User confirmed ESP32 is ready and waiting${NC}"
+echo -e "${YELLOW}What's happening:${NC}"
+echo "  1. ESP32 is uploading code (~30-60 seconds)"
+echo "  2. ESP32 will boot and connect to WiFi (~8-15 seconds)"
+echo "  3. Server will auto-start after countdown completes"
+echo ""
+echo -e "${YELLOW}Check ESP32 serial monitor terminal for:${NC}"
+echo "  ✅ Upload successful"
+echo "  ✅ ESP32 connected to WiFi"
+echo "  ✅ Message: 'Waiting for server...'"
+echo ""
+echo -e "${YELLOW}⏳ Server will start automatically in 20 seconds...${NC}"
+echo -e "${YELLOW}   (Press Ctrl+C if you need to abort)${NC}"
+echo ""
+
+# Countdown timer with visual feedback
+COUNTDOWN_SECONDS=20
+for i in $(seq $COUNTDOWN_SECONDS -1 1); do
+    # Progress bar calculation
+    PERCENT=$((($COUNTDOWN_SECONDS - $i) * 100 / $COUNTDOWN_SECONDS))
+    BAR_LENGTH=$((PERCENT / 5))  # Scale to 20 character bar
+    BAR=$(printf '%*s' $BAR_LENGTH '' | tr ' ' '█')
+    EMPTY=$(printf '%*s' $((20 - BAR_LENGTH)) '' | tr ' ' '░')
+    
+    # Color coding: Yellow > 5s, Orange 3-5s, Red < 3s
+    if [ $i -gt 5 ]; then
+        COLOR="${YELLOW}"
+    elif [ $i -gt 2 ]; then
+        COLOR='\033[0;33m'  # Orange
+    else
+        COLOR="${RED}"
+    fi
+    
+    # Display countdown with progress bar
+    echo -ne "   ${COLOR}⏱️  Starting server in ${i} seconds... [${BAR}${EMPTY}] ${PERCENT}%${NC}\r"
+    sleep 1
+done
+
+# Clear the countdown line and show completion
+echo -ne '\r\033[K'  # Clear line
+echo ""
+echo -e "${GREEN}✅ Countdown complete! ESP32 should be ready now${NC}"
+echo -e "${GREEN}✅ Starting Ubuntu Server automatically...${NC}"
 echo ""
 
 # ============================================================================
