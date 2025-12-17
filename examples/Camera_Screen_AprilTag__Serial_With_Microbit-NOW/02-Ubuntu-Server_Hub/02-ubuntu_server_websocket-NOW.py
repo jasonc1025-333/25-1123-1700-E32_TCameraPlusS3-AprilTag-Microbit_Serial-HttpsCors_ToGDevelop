@@ -1767,13 +1767,15 @@ def connection_uptime():
         minutes = (uptime_seconds % 3600) // 60
         seconds = uptime_seconds % 60
         
-        # Format string
+        # Format string [jwc 25-1217-0750: Added seconds display]
         uptime_str = ""
         if days > 0:
             uptime_str += f"{days}d "
         if hours > 0 or days > 0:
             uptime_str += f"{hours}h "
-        uptime_str += f"{minutes}m"
+        if minutes > 0 or hours > 0 or days > 0:
+            uptime_str += f"{minutes}m "
+        uptime_str += f"{seconds}s"
         
         return jsonify({
             'connected': True,
