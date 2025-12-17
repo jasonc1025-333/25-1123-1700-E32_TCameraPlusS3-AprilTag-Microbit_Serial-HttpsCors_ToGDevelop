@@ -88,34 +88,52 @@ PROJECT_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 TERMINAL_PIDS=()
 
 # Cleanup function to kill all terminal processes on exit [jwc 25-1216-0110]
+# Updated [jwc 25-1217-0720]: Enhanced to kill process groups and all children
 cleanup() {
     echo ""
     echo -e "${YELLOW}🛑 Ctrl-C detected - Shutting down all processes...${NC}"
     echo ""
     
     # Kill by exact process patterns (most reliable method)
-    echo "  [1/4] Stopping PlatformIO/ESP32 processes..."
-    pkill -9 -f "pio run" 2>/dev/null
-    pkill -9 -f "pio device monitor" 2>/dev/null  
-    pkill -9 -f "platformio" 2>/dev/null
+    echo "  [1/5] Stopping PlatformIO/ESP32 processes..."
+    pkill -9 -f "pio run" 2>/dev/null || true
+    pkill -9 -f "pio device monitor" 2>/dev/null || true
+    pkill -9 -f "platformio" 2>/dev/null || true
     
-    echo "  [2/4] Stopping Python servers..."
-    pkill -9 -f "02-ubuntu_server_websocket-NOW.py" 2>/dev/null
-    pkill -9 -f "python3 -m http.server 5100" 2>/dev/null
-    pkill -9 -f "http.server 5100" 2>/dev/null
+    echo "  [2/5] Stopping Python servers..."
+    pkill -9 -f "02-ubuntu_server_websocket-NOW.py" 2>/dev/null || true
+    pkill -9 -f "python3 -m http.server 5100" 2>/dev/null || true
+    pkill -9 -f "http.server 5100" 2>/dev/null || true
     
-    echo "  [3/4] Stopping launcher scripts..."
-    pkill -9 -f ".launch_esp32.sh" 2>/dev/null
-    pkill -9 -f ".launch_server.sh" 2>/dev/null
-    pkill -9 -f ".launch_gdevelop.sh" 2>/dev/null
+    echo "  [3/5] Stopping launcher scripts..."
+    pkill -9 -f ".launch_esp32.sh" 2>/dev/null || true
+    pkill -9 -f ".launch_server.sh" 2>/dev/null || true
+    pkill -9 -f ".launch_gdevelop.sh" 2>/dev/null || true
     
-    echo "  [4/4] Closing terminal windows..."
-    # Close the gnome-terminal windows we launched
+    echo "  [4/5] Killing process groups of launched terminals..."
+    # Kill process groups to ensure all child processes are terminated
     for pid in "${TERMINAL_PIDS[@]}"; do
         if ps -p $pid > /dev/null 2>&1; then
-            kill -9 $pid 2>/dev/null
+            # Get the process group ID
+            pgid=$(ps -o pgid= -p $pid 2>/dev/null | tr -d ' ')
+            if [ -n "$pgid" ]; then
+                echo "    Killing process group $pgid (parent PID: $pid)"
+                # Kill entire process group (negative PGID kills the group)
+                kill -9 -- -$pgid 2>/dev/null || true
+            fi
+            # Also kill the parent process directly
+            kill -9 $pid 2>/dev/null || true
         fi
     done
+    
+    echo "  [5/5] Final cleanup - killing any remaining gnome-terminal processes..."
+    # Kill any remaining gnome-terminal processes that match our titles
+    pkill -9 -f "gnome-terminal.*ESP32 Client" 2>/dev/null || true
+    pkill -9 -f "gnome-terminal.*Ubuntu WebSocket Server" 2>/dev/null || true
+    pkill -9 -f "gnome-terminal.*GDevelop Game Server" 2>/dev/null || true
+    
+    # Give processes a moment to die
+    sleep 1
     
     echo ""
     echo -e "${GREEN}✅ All processes stopped and terminals closed${NC}"
@@ -238,7 +256,7 @@ read
 # ============================================================================
 # Step 1: Check Prerequisites
 # ============================================================================
-echo -e "${YELLOW}[1/6] Checking prerequisites...${NC}"
+echo -e "${YELLOW}[1/7] Checking prerequisites...${NC}"
 
 # Check for gnome-terminal
 if ! command -v gnome-terminal &> /dev/null; then
