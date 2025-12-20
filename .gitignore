@@ -12,9 +12,13 @@
 
 ### jwc 25-1207-0900 
 ###
-### KWC 25-1207-0920 \/\/ 9Z-ARCHIVE-BAD/*
-### KWC 25-1207-0920 \/\/ */99-ARCHIVE-GOOD/*
-**/*ARCHIVE*/
+### jwc 25-1207-0920 \/\/ 9Z-ARCHIVE-BAD/*
+### jwc 25-1207-0920 \/\/ */99-ARCHIVE-GOOD/*
+### jwc 25-1220-1000 \/\/ **/*ARCHIVE*/
+### jwc 25-1220-1000 \/\/ Keep in GitHub
+!**/ARCHIVE-GOOD/
+**/*ARCHIVE-BAD/
+
 
 ### venv/
 ###
