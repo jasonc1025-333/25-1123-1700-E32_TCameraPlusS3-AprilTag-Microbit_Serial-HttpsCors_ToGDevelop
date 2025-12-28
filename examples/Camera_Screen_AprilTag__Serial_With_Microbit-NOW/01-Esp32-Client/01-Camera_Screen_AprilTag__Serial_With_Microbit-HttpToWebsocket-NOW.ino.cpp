@@ -1483,13 +1483,13 @@ void setup()
     //// jwc yyy 24-1231-0420: Serial2.begin(115200, SERIAL_8N1, 15, 18); //
     //// jwc o 25-0416-1500 Serial2.begin(115200, SERIAL_8N1, 43, 44); //
     
-    //// jwc ? //// jwc 25-0416-1500 Lg T-CameraPlus-S3: U0RxD = 50 (Right Pin), U0TxD = 49 (Left Pin)
-    //// jwc ? Serial2.begin(115200, SERIAL_8N1, 50, 49); //
-
-  
-    //// jwc ? Serial.printf("*** Serial_0 & Serial_2: Setup Done\n");
-    //// jwc ? printf("*** Serial_0 & Serial_2: Setup Done\n");
-    printf("*** Serial_0 & Serial_2: Setup Done\n");
+    //// jwc 25-1227-1434 ✅ Assign Serial2 to physical external pins 50 (RX) and 49 (TX)
+    //// Physical hardware pins on T-Camera Plus S3 board (NOT USB)
+    //// Serial stays on USB for debugging, Serial2 on pins 50/49 for micro:bit
+    Serial2.setPins(50, 49);  // RX=50, TX=49
+    Serial2.begin(115200);
+    
+    printf("*** Serial (USB debug) & Serial2 (micro:bit pins RX=50 TX=49): Setup Done\n");
     printf("\n");
     
     pinMode(LCD_BL, OUTPUT);
@@ -1896,7 +1896,9 @@ void loop()
 
     //// jwc Following Serial.read causes some lag to videostream, so can stub out if need full real-time videostream   
 #if DEBUG >= 1 //// test lag?
-    while (Serial.available()) {
+    //// jwc o 25-1227-1306 while (Serial.available()) {
+    //// jwc 25-1227-1306 ✅ FIX: Check Serial2 (micro:bit) not Serial (USB)
+    while (Serial2.available()) {
         //// jwc 25-0418-0000 char c = Serial.read();
         //// jwc 25-0418-0000 //// jwc This appears to work-NOT via Uart0 Port: Serial.printf("P:0< '%c' [0x%02x] ", c, c);
         //// jwc 25-0418-0000 //// jwc y printf("p:0< '%c' [0x%02x] ", c, c);
@@ -1922,7 +1924,9 @@ void loop()
         //// jwc 25-0418-0000 //// jwc oy     printf("\n");
         //// jwc 25-0418-0000 //// jwc oy }
 
-        string_String_Read = Serial.readString();
+        //// jwc o 25-1227-1306 string_String_Read = Serial.readString();
+        //// jwc 25-1227-1306 ✅ FIX: Read from Serial2 (micro:bit) not Serial (USB)
+        string_String_Read = Serial2.readString();
         string_String_Read.trim();
 
         //// jwc COULD THIS CAUSE Mb to have BufferRx Overrun?: printf("0<'%c'", c);
@@ -1931,8 +1935,11 @@ void loop()
         gfx->setTextSize(3);
         //// jwc 1, 50, try 100, 200, 175
         gfx->setCursor(1,175);
-        gfx->printf("\n0<'%s'", string_String_Read);
-        printf     ("\n0<'%s'", string_String_Read);
+        //// jwc o 25-1227-1306 gfx->printf("\n0<'%s'", string_String_Read);
+        //// jwc o 25-1227-1306 printf     ("\n0<'%s'", string_String_Read);
+        //// jwc 25-1227-1306 2< means Serial2 input (from micro:bit)
+        gfx->printf("\n2<'%s'", string_String_Read.c_str());
+        printf     ("\n2<'%s' [%d]", string_String_Read.c_str(), string_String_Read.length());
 
         //// jwc '1000', 50 not bad, 25 too fast, try 100 nice to read, but get stuck infitely in this while loop, no more Esp_Tx
         //// jwc not bad, but needs slower: delay(100);
@@ -2024,7 +2031,8 @@ void loop()
         //// jwc This appears to work via Uart0 Port \/
         //// jwc printf("%s", string_String_Write);
         //// jwc yy remove '\n' to reduce log-space: printf("\n%s", string_String_Write);
-        printf("%s", string_String_Write);
+        //// jwc 25-1227-0210 FIX: Must use .c_str() to convert Arduino String to C-string for printf()
+        printf("%s", string_String_Write.c_str());
 
         //// jwc ? \/     Serial.write(value_Int);
         
@@ -2036,7 +2044,8 @@ void loop()
     
         //// jwc This appears to work via Uart0 Port \/
         //// jwc y printf("p: .0.\n");
-        printf(".");
+        //// jwc yy printf(".");
+        printf("-");
 
     }
     

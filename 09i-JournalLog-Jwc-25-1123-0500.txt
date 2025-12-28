@@ -264,3 +264,51 @@ You can now see exactly when and how CORS headers are applied to both the prefli
    ```
 
 
+25-1227-2350
+
+   using 'sudo dmesg', noted that after disconnect (8159.), and reconnect (8184.+), but needed a hardware-reset (8240.+). Is that an issue? :
+
+      (venv) jasonc1025@BMax-B1Pro:~/Jwc-25-0514-2300-Bmax_B1Pro-Ubuntu_22/12j-Db/Dropbox/09k-E32-SM/25-0517-1900-E32--OPENED-25-0803-0830-MoveToDb/13i-T-CameraPlus-S3-NOW-Ubuntu22_BmaxB1Pro--25-0505-0730-NOW$ sudo dmesg | grep -i "tty\|usb\|serial" | tail -30
+      [ 7981.351904] usb 1-2: Product: USB JTAG/serial debug unit
+      [ 7981.351911] usb 1-2: Manufacturer: Espressif
+      [ 7981.351918] usb 1-2: SerialNumber: 48:CA:43:4B:93:74
+      [ 7981.357632] cdc_acm 1-2:1.0: ttyACM0: USB ACM device
+      [ 8159.955957] usb 1-2: USB disconnect, device number 46
+      [ 8184.957402] usb 1-2: new full-speed USB device number 47 using xhci_hcd
+      [ 8185.073135] usb 1-2: device descriptor read/64, error -71
+      [ 8185.295212] usb 1-2: device descriptor read/64, error -71
+      [ 8185.518386] usb 1-2: new full-speed USB device number 48 using xhci_hcd
+      [ 8185.636159] usb 1-2: device descriptor read/64, error -71
+      [ 8185.855449] usb 1-2: device descriptor read/64, error -71
+      [ 8185.964595] usb usb1-port2: attempt power cycle
+      [ 8186.344167] usb 1-2: new full-speed USB device number 49 using xhci_hcd
+      [ 8186.344459] usb 1-2: Device not responding to setup address.
+      [ 8186.548526] usb 1-2: Device not responding to setup address.
+      [ 8186.756153] usb 1-2: device not accepting address 49, error -71
+      [ 8186.758175] usb 1-2: WARN: invalid context state for evaluate context command.
+      [ 8186.873377] usb 1-2: new full-speed USB device number 50 using xhci_hcd
+      [ 8186.873681] usb 1-2: Device not responding to setup address.
+      [ 8187.076470] usb 1-2: Device not responding to setup address.
+      [ 8187.284370] usb 1-2: device not accepting address 50, error -71
+      [ 8187.284524] usb 1-2: WARN: invalid context state for evaluate context command.
+      [ 8187.284624] usb usb1-port2: unable to enumerate USB device
+      [ 8240.082593] usb 1-2: new full-speed USB device number 51 using xhci_hcd
+      [ 8240.212353] usb 1-2: New USB device found, idVendor=303a, idProduct=1001, bcdDevice= 1.01
+      [ 8240.212382] usb 1-2: New USB device strings: Mfr=1, Product=2, SerialNumber=3
+      [ 8240.212391] usb 1-2: Product: USB JTAG/serial debug unit
+      [ 8240.212398] usb 1-2: Manufacturer: Espressif
+      [ 8240.212404] usb 1-2: SerialNumber: 48:CA:43:4B:93:74
+      [ 8240.216399] cdc_acm 1-2:1.0: ttyACM0: USB ACM device
+
+   (venv) jasonc1025@BMax-B1Pro:~/Jwc-25-0514-2300-Bmax_B1Pro-Ubuntu_22/12j-Db/Dropbox/09k-E32-SM/25-0517-1900-E32--OPENED-25-0803-0830-MoveToDb/13i-T-CameraPlus-S3-NOW-Ubuntu22_BmaxB1Pro--25-0505-0730-NOW$ ls -la /dev/ttyACM0 && echo "" && echo "=== Device Info ===" && udevadm info --name=/dev/ttyACM0 --attribute-walk | grep -E "ATTRS{idVendor}|ATTRS{idProduct}|ATTRS{manufacturer}|ATTRS{product}" | head -4
+crw-rw-rw- 1 root dialout 166, 0 Dec 27 23:44 /dev/ttyACM0
+
+      === Device Info ===
+         ATTRS{idProduct}=="1001"
+         ATTRS{idVendor}=="303a"
+         ATTRS{manufacturer}=="Espressif"
+         ATTRS{product}=="USB JTAG/serial debug unit"
+
+
+   (venv) jasonc1025@BMax-B1Pro:~/Jwc-25-0514-2300-Bmax_B1Pro-Ubuntu_22/12j-Db/Dropbox/09k-E32-SM/25-0517-1900-E32--OPENED-25-0803-0830-MoveToDb/13i-T-CameraPlus-S3-NOW-Ubuntu22_BmaxB1Pro--25-0505-0730-NOW$ ls -al /dev/ttyA*
+         crw-rw-rw- 1 root dialout 166, 0 Dec 27 23:44 /dev/ttyACM0
