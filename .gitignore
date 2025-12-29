@@ -16,7 +16,8 @@
 ### jwc 25-1207-0920 \/\/ */99-ARCHIVE-GOOD/*
 ### jwc 25-1220-1000 \/\/ **/*ARCHIVE*/
 ### jwc 25-1220-1000 \/\/ Keep in GitHub
-!**/ARCHIVE-GOOD/
+### jwc 25-1229-0140 Fixed: Force-include ARCHIVE-GOOD, but ignore nested ARCHIVE-BAD
+!**/*ARCHIVE-GOOD/
 **/*ARCHIVE-BAD/
 
 
